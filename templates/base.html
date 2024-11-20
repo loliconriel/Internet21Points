@@ -3,9 +3,45 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="../static/stylesheets/bootstrap.css">
+    <link rel="stylesheet" href="../static/stylesheets/custom.css">
     <title>{% block title %}base{% endblock %}</title>
 </head>
 <body>
-    <h1>Hello</h1>
+    <header class="header" style="background-image: url(../static/image/);">
+        <nav class="navbar bg-light px-2">
+            <div class="container d-flex justify-content-between align-items-center">
+                <!-- 左側品牌 -->
+                <span class="navbar-brand mb-0 h1 fw-bold">
+                    撲克世界
+                    <span class="d-none d-md-inline"> Poker World</span>
+                </span>
+        
+                <!-- 右側按鈕 -->
+                <div>
+                    <a href="{{ url_for('home') }}" class="btn btn-custom ms-2">首頁</a>
+                    <a href="{{ url_for('login') }}" class="btn btn-custom ms-2">會員登入</a>
+                </div>
+            </div>
+        </nav>
+        <div class="overlay">
+            {% block content %}
+            {% endblock %}
+        </div>
+        <footer class="footer bg-light p-2">
+            <div class="container d-flex justify-content-between align-items-center">
+                
+                <div class="footer-left">
+                    <div class="fw-bold border-bottom border-secondary">
+                        撲克世界 Poker World
+                    </div>輕鬆
+                </div>
+
+
+            </div>
+        </footer>
+    </header>
+    {% block content1 %}
+    {% endblock %}
 </body>
 </html>
