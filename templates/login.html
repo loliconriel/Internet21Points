@@ -7,10 +7,26 @@
     <title>登入</title>
 </head>
 <body>
-    <header class="header" style="background-color: #23e0e0; height: 100vh;">
+    <header class="header" style="background-image: url(../static/image/Log_Background.jpg); background-size: cover; background-position: center; background-repeat: no-repeat; height: 100vh;">
         <div class="container d-flex justify-content-center align-items-center h-100">
             <form action="/login" method="POST" class="p-4 border rounded shadow-lg" style="width: 400px; background-color: #f9f9f9;">
                 <h3 class="text-center mb-4">會員登入</h3>
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                <div>
+                    {% for category, message in messages %}
+                    <div class="alert alert-{{ category }}" role="alert">
+                        {{ message }}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                {% endwith %}
+                {% if error %}
+                <div class="alert alert-danger text-center" role="alert">
+                    {{ error }}
+                </div>
+                {% endif %}
                 <div class="mb-3">
                     <label for="username" class="form-label">帳號：</label>
                     <input type="text" id="username" name="username" class="form-control" placeholder="輸入帳號" required>
@@ -28,6 +44,5 @@
             </form>
         </div>
     </header>
-    
 </body>
 </html>

@@ -56,6 +56,14 @@
     text-decoration: none;
 }
 
+a.navbar-brand {
+    text-decoration: none; /* 移除下劃線 */
+}
+a.navbar-brand:hover,
+a.navbar-brand:focus {
+    text-decoration: none; /* 確保 hover 或 focus 時也不顯示下劃線 */
+}
+
 @media (max-width: 1200px) {
     .card-text {
         font-size: 0.8rem;

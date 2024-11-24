@@ -9,18 +9,17 @@
 </head>
 <body>
     <header class="header" style="background-image: url(../static/image/);">
-        <nav class="navbar bg-light px-2">
-            <div class="container d-flex justify-content-between align-items-center">
-                <!-- 左側品牌 -->
-                <span class="navbar-brand mb-0 h1 fw-bold">
-                    撲克世界
-                    <span class="d-none d-md-inline"> Poker World</span>
-                </span>
-        
-                <!-- 右側按鈕 -->
-                <div>
-                    <a href="{{ url_for('home') }}" class="btn btn-custom ms-2">首頁</a>
-                    <a href="{{ url_for('login') }}" class="btn btn-custom ms-2">會員登入</a>
+        <nav class="navbar navbar-expand-lg navbar-light bg-light">
+            <div class="container">
+                <a class="navbar-brand" href="/">撲克世界</a>
+                <div class="collapse navbar-collapse justify-content-end">
+                    {% if session.get('user_id') %}
+                        <span class="navbar-text me-3">您好，{{ session['username'] }}</span>
+                        <a href="/logout" class="btn btn-danger">登出</a>
+                    {% else %}
+                        <a href="/register" class="btn btn-primary me-2">註冊</a>
+                        <a href="/login" class="btn btn-success">登入</a>
+                    {% endif %}
                 </div>
             </div>
         </nav>
@@ -28,6 +27,7 @@
             {% block content %}
             {% endblock %}
         </div>
+        <!--
         <footer class="footer bg-light p-2">
             <div class="container d-flex justify-content-between align-items-center">
                 
@@ -40,6 +40,7 @@
 
             </div>
         </footer>
+        -->
     </header>
     {% block content1 %}
     {% endblock %}
