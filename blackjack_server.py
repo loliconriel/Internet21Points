@@ -100,8 +100,9 @@ def handle_client(client_socket, addr):
 
         # 發牌邏輯
         if not room_dealer_hands[room_choice]:  # 確保每輪莊家手牌一致
-            deck = shuffle_deck()
+            deck = shuffle_deck()  # Initialize the deck before dealing hands
             room_dealer_hands[room_choice] = [deck.pop(), deck.pop()]
+
         dealer_hand = room_dealer_hands[room_choice]
         hands = {client: [deck.pop(), deck.pop()] for client in rooms[room_choice]}
 
@@ -153,6 +154,7 @@ def handle_client(client_socket, addr):
             room_events[room_choice].set()
 
     client_socket.close()
+
 
 
 def main():
