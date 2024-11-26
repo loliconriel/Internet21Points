@@ -16,5 +16,9 @@ def main():
             choice = input(data)
             client.sendall(choice.encode())
 
+        elif "是否重新開始" in data:
+            choice = input(data)
+            client.sendall(choice.encode())
+
 if __name__ == "__main__":
     main()
