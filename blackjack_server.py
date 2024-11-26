@@ -71,94 +71,102 @@ def handle_client(client_socket, addr):
     """處理每個連線玩家"""
     client_socket.sendall("歡迎來到 21 點！\n".encode())
     
-    # 顯示 Lobby 狀態
-    lobby_status = "\n".join([f"{room} ({len(rooms[room])}/{MAX_PLAYERS})" for room in rooms])
-    client_socket.sendall((lobby_status + "\n加入房間：").encode())
-    
-    # 接收玩家選擇的房間
-    room_choice = client_socket.recv(1024).decode().strip()
-    if room_choice not in rooms:
-        client_socket.sendall("無效的房間號，請重新選擇。\n".encode())
-        
-    
-    # 確認房間人數
-    if len(rooms[room_choice]) >= MAX_PLAYERS:
-        client_socket.sendall("房間已滿，請選擇其他房間。\n".encode())
-        
-
-    # 加入房間
-    rooms[room_choice].append(client_socket)
-    client_socket.sendall(f"成功加入 {room_choice}！等待其他玩家...\n".encode())
-
     while True:
+        # 顯示 Lobby 狀態
+        lobby_status = "\n".join([f"{room} ({len(rooms[room])}/{MAX_PLAYERS})" for room in rooms])
+        client_socket.sendall((lobby_status + "\n加入房間：").encode())
         
+        # 接收玩家選擇的房間
+        room_choice = client_socket.recv(1024).decode().strip()
+        if room_choice not in rooms:
+            client_socket.sendall("無效的房間號，請重新選擇。\n".encode())
+            continue
+        
+        # 確認房間人數
+        if len(rooms[room_choice]) >= MAX_PLAYERS:
+            client_socket.sendall("房間已滿，請選擇其他房間。\n".encode())
+            continue
 
-        # 如果房間人數滿了，觸發事件開始遊戲
-        if len(rooms[room_choice]) == MAX_PLAYERS:
-            room_events[room_choice].set()
+        # 加入房間
+        rooms[room_choice].append(client_socket)
+        client_socket.sendall(f"成功加入 {room_choice}！等待其他玩家...\n".encode())
+    
+        while True:
+            # 如果房間人數滿了，觸發事件開始遊戲
+            if len(rooms[room_choice]) == MAX_PLAYERS:
+                room_events[room_choice].set()
 
-        # 等待遊戲開始
-        room_events[room_choice].wait()
+            # 等待遊戲開始
+            room_events[room_choice].wait()
+            
+            # 發牌邏輯
+            if not room_dealer_hands[room_choice]:  # 確保每輪莊家手牌一致
+                deck = shuffle_deck()  # Initialize the deck before dealing hands
+                room_dealer_hands[room_choice] = [deck.pop(), deck.pop()]
 
-        # 發牌邏輯
-        if not room_dealer_hands[room_choice]:  # 確保每輪莊家手牌一致
-            deck = shuffle_deck()  # Initialize the deck before dealing hands
-            room_dealer_hands[room_choice] = [deck.pop(), deck.pop()]
+            dealer_hand = room_dealer_hands[room_choice]
+            hands = {client: [deck.pop(), deck.pop()] for client in rooms[room_choice]}
 
-        dealer_hand = room_dealer_hands[room_choice]
-        hands = {client: [deck.pop(), deck.pop()] for client in rooms[room_choice]}
-
-        # 廣播莊家第一張牌和每個玩家的手牌
-        for client in rooms[room_choice]:
-            client.sendall(f"莊家第一張牌：{dealer_hand[0]}\n".encode())
-            client.sendall(f"你的牌：{hands[client]}\n".encode())
-
-        # 玩家回合依序進行
-        for client in rooms[room_choice]:
-                while True:
-                    client.sendall("是否加牌？(y/n): ".encode())
-                    choice = client.recv(1024).decode().strip()
-                    if choice.lower() == 'y':
-                        card = deck.pop()
-                        hands[client].append(card)
-                        client.sendall(f"你抽到的牌是 {card}\n".encode())
-                        client.sendall(f"你的牌：{hands[client]}\n".encode())
-                        if calculate_score(hands[client]) > 21:
-                            client.sendall("你爆牌了！\n".encode())
-                            break
-                    elif choice.lower() == 'n':
-                        break
-
-        # 等待所有玩家完成回合
-        if client_socket == rooms[room_choice][-1]:
-            room_events[room_choice].clear()
-
-        # 莊家操作
-        if not room_events[room_choice].is_set():
-            dealer_hand = dealer_play(deck, dealer_hand)
-
-        # 比較結果並結算
-        result = determine_results(hands, dealer_hand)
-        for client in rooms[room_choice]:
-            client.sendall(f"遊戲結束！莊家牌：{dealer_hand}\n".encode())
-            client.sendall(f"你的結果：{result[client]}\n".encode())
-
-        # 是否繼續遊戲
-        for client in rooms[room_choice]:
-            client.sendall("是否重新開始？(y/n): ".encode())
-            choice = client.recv(1024).decode().strip()
-            if choice.lower() != 'y':
-                rooms[room_choice].remove(client)
-
-        if len(rooms[room_choice]) < MAX_PLAYERS:
+            # 廣播莊家第一張牌和每個玩家的手牌
             for client in rooms[room_choice]:
-                client.sendall("人數未滿，請稍等。\n".encode())
+                client.sendall(f"莊家第一張牌：{dealer_hand[0]}\n".encode())
+                client.sendall(f"你的牌：{hands[client]}\n".encode())
 
-        # 若所有人選擇繼續，重置狀態
-        if len(rooms[room_choice]) == MAX_PLAYERS:
-            room_events[room_choice].set()
+            # 玩家回合依序進行
+            for client in rooms[room_choice]:
+                    while True:
+                        client.sendall("是否加牌？(y/n): ".encode())
+                        choice = client.recv(1024).decode().strip()
+                        if choice.lower() == 'y':
+                            card = deck.pop()
+                            hands[client].append(card)
+                            client.sendall(f"你抽到的牌是 {card}\n".encode())
+                            client.sendall(f"你的牌：{hands[client]}\n".encode())
+                            if calculate_score(hands[client]) > 21:
+                                client.sendall("你爆牌了！\n".encode())
+                                break
+                        elif choice.lower() == 'n':
+                            break
 
-    client_socket.close()
+            # 等待所有玩家完成回合
+            if client_socket == rooms[room_choice][-1]:
+                room_events[room_choice].clear()
+
+            # 莊家操作
+            if not room_events[room_choice].is_set():
+                dealer_hand = dealer_play(deck, dealer_hand)
+
+            # 比較結果並結算
+            result = determine_results(hands, dealer_hand)
+            for client in rooms[room_choice]:
+                client.sendall(f"遊戲結束！莊家牌：{dealer_hand}\n".encode())
+                client.sendall(f"你的結果：{result[client]}\n".encode())
+
+            # 是否繼續遊戲
+            for i in range(0,MAX_PLAYERS,1):
+                print(i)
+                client = rooms[room_choice][i]
+                client.sendall("是否重新開始？(y/n): ".encode())
+                choice = client.recv(1024).decode().strip()
+                if choice.lower() == 'n':
+                    client.sendall("離開遊戲。\n".encode())
+                    rooms[room_choice].remove(client)
+                    print("目前是")
+                    print(i)
+                    print(type(i))
+                    i = i-1
+                    print("扣完目前是")
+                    print(i)
+            
+            if len(rooms[room_choice]) < MAX_PLAYERS:
+                for client in rooms[room_choice]:
+                    client.sendall("人數未滿，請稍等。\n".encode())
+
+            # 若所有人選擇繼續，重置狀態
+            if len(rooms[room_choice]) == MAX_PLAYERS:
+                room_events[room_choice].set()
+
+        client_socket.close()
 
 
 
