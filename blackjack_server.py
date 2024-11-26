@@ -143,21 +143,20 @@ def handle_client(client_socket, addr):
                 client.sendall(f"你的結果：{result[client]}\n".encode())
 
             # 是否繼續遊戲
-            for i in range(0,MAX_PLAYERS,1):
+            i = 0
+            while i < len(rooms[room_choice]):
                 print(i)
                 client = rooms[room_choice][i]
                 client.sendall("是否重新開始？(y/n): ".encode())
                 choice = client.recv(1024).decode().strip()
-                if choice.lower() == 'n':
+                if choice.lower() != 'y':
                     client.sendall("離開遊戲。\n".encode())
                     rooms[room_choice].remove(client)
-                    print("目前是")
-                    print(i)
-                    print(type(i))
-                    i = i-1
-                    print("扣完目前是")
-                    print(i)
-            
+                else:
+                    i += 1 
+
+
+            # 若人數不足，廣播等待訊息
             if len(rooms[room_choice]) < MAX_PLAYERS:
                 for client in rooms[room_choice]:
                     client.sendall("人數未滿，請稍等。\n".encode())
@@ -166,7 +165,7 @@ def handle_client(client_socket, addr):
             if len(rooms[room_choice]) == MAX_PLAYERS:
                 room_events[room_choice].set()
 
-        client_socket.close()
+        
 
 
 
@@ -184,4 +183,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
