@@ -70,26 +70,28 @@ def determine_results(hands, dealer_hand):
 def handle_client(client_socket, addr):
     """處理每個連線玩家"""
     client_socket.sendall("歡迎來到 21 點！\n".encode())
+    
+    # 顯示 Lobby 狀態
+    lobby_status = "\n".join([f"{room} ({len(rooms[room])}/{MAX_PLAYERS})" for room in rooms])
+    client_socket.sendall((lobby_status + "\n加入房間：").encode())
+    
+    # 接收玩家選擇的房間
+    room_choice = client_socket.recv(1024).decode().strip()
+    if room_choice not in rooms:
+        client_socket.sendall("無效的房間號，請重新選擇。\n".encode())
+        
+    
+    # 確認房間人數
+    if len(rooms[room_choice]) >= MAX_PLAYERS:
+        client_socket.sendall("房間已滿，請選擇其他房間。\n".encode())
+        
+
+    # 加入房間
+    rooms[room_choice].append(client_socket)
+    client_socket.sendall(f"成功加入 {room_choice}！等待其他玩家...\n".encode())
 
     while True:
-        # 顯示 Lobby 狀態
-        lobby_status = "\n".join([f"{room} ({len(rooms[room])}/{MAX_PLAYERS})" for room in rooms])
-        client_socket.sendall((lobby_status + "\n加入房間：").encode())
         
-        # 接收玩家選擇的房間
-        room_choice = client_socket.recv(1024).decode().strip()
-        if room_choice not in rooms:
-            client_socket.sendall("無效的房間號，請重新選擇。\n".encode())
-            continue
-        
-        # 確認房間人數
-        if len(rooms[room_choice]) >= MAX_PLAYERS:
-            client_socket.sendall("房間已滿，請選擇其他房間。\n".encode())
-            continue
-
-        # 加入房間
-        rooms[room_choice].append(client_socket)
-        client_socket.sendall(f"成功加入 {room_choice}！等待其他玩家...\n".encode())
 
         # 如果房間人數滿了，觸發事件開始遊戲
         if len(rooms[room_choice]) == MAX_PLAYERS:
@@ -142,11 +144,15 @@ def handle_client(client_socket, addr):
             client.sendall(f"你的結果：{result[client]}\n".encode())
 
         # 是否繼續遊戲
-        client.sendall("是否重新開始？(y/n): ".encode())
-        choice = client.recv(1024).decode().strip()
-        if choice.lower() != 'y':
-            rooms[room_choice].remove(client)
-            break
+        for client in rooms[room_choice]:
+            client.sendall("是否重新開始？(y/n): ".encode())
+            choice = client.recv(1024).decode().strip()
+            if choice.lower() != 'y':
+                rooms[room_choice].remove(client)
+
+        if len(rooms[room_choice]) < MAX_PLAYERS:
+            for client in rooms[room_choice]:
+                client.sendall("人數未滿，請稍等。\n".encode())
 
         # 若所有人選擇繼續，重置狀態
         if len(rooms[room_choice]) == MAX_PLAYERS:
