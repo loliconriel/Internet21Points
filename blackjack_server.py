@@ -94,6 +94,7 @@ def handle_client(client_socket, addr):
         while True:
             # 如果房間人數滿了，觸發事件開始遊戲
             if len(rooms[room_choice]) == MAX_PLAYERS:
+                room_dealer_hands[room_choice] = []
                 room_events[room_choice].set()
 
             # 等待遊戲開始
@@ -101,7 +102,7 @@ def handle_client(client_socket, addr):
             
             # 發牌邏輯
             if not room_dealer_hands[room_choice]:  # 確保每輪莊家手牌一致
-                deck = shuffle_deck()  # Initialize the deck before dealing hands
+                deck = shuffle_deck()  
                 room_dealer_hands[room_choice] = [deck.pop(), deck.pop()]
 
             dealer_hand = room_dealer_hands[room_choice]
@@ -145,7 +146,6 @@ def handle_client(client_socket, addr):
             # 是否繼續遊戲
             i = 0
             while i < len(rooms[room_choice]):
-                print(i)
                 client = rooms[room_choice][i]
                 client.sendall("是否重新開始？(y/n): ".encode())
                 choice = client.recv(1024).decode().strip()
@@ -155,15 +155,11 @@ def handle_client(client_socket, addr):
                 else:
                     i += 1 
 
-
             # 若人數不足，廣播等待訊息
             if len(rooms[room_choice]) < MAX_PLAYERS:
                 for client in rooms[room_choice]:
                     client.sendall("人數未滿，請稍等。\n".encode())
 
-            # 若所有人選擇繼續，重置狀態
-            if len(rooms[room_choice]) == MAX_PLAYERS:
-                room_events[room_choice].set()
 
         
 
