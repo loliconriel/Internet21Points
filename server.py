@@ -19,7 +19,7 @@ def init_db():
         conn.commit()
 
 # 註冊 API
-@app.route('/api/register', methods=['POST'])
+@app.route('/register', methods=['POST'])
 def register():
     data = request.get_json()
     username = data.get('username')
@@ -44,7 +44,7 @@ def register():
         return jsonify({'error': f'Database error: {str(e)}'}), 500
 
 # 登入 API
-@app.route('/api/login', methods=['POST'])
+@app.route('/login', methods=['POST'])
 def login():
     data = request.get_json()
     username = data.get('username')
@@ -63,15 +63,18 @@ def login():
     else:
         return jsonify({'error': 'Invalid credentials'}), 400
 
-# 獲取所有使用者資料的 API
-@app.route('/api/users', methods=['GET'])
+# 獲取所有用戶的 API
+@app.route('/users', methods=['GET'])
 def get_users():
-    with sqlite3.connect(DATABASE) as conn:
-        cursor = conn.cursor()
-        cursor.execute('SELECT id, username, money FROM User')
-        users = cursor.fetchall()
+    try:
+        with sqlite3.connect(DATABASE) as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT id, username, money FROM User')
+            users = cursor.fetchall()
 
-    return jsonify({'users': [{'id': user[0], 'username': user[1], 'money': user[2]} for user in users]}), 200
+        return jsonify({'users': [{'id': user[0], 'username': user[1], 'money': user[2]} for user in users]}), 200
+    except sqlite3.Error as e:
+        return jsonify({'error': f'Database error: {str(e)}'}), 500
 
 if __name__ == "__main__":
     init_db()  # 啟動應用時初始化資料庫
