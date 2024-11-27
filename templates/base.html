@@ -13,8 +13,9 @@
             <div class="container">
                 <a class="navbar-brand" href="/">撲克世界</a>
                 <div class="collapse navbar-collapse justify-content-end">
-                    {% if session.get('user_id') %}
+                    {% if session.get('username') %}
                         <span class="navbar-text me-3">您好，{{ session['username'] }}</span>
+                        <span class="navbar-text me-3">當前餘額，{{ session.get('money', 'qwe') }}</span>
                         <a href="/logout" class="btn btn-danger">登出</a>
                     {% else %}
                         <a href="/register" class="btn btn-primary me-2">註冊</a>
