@@ -9,7 +9,7 @@
 <body>
     <header class="header" style="background-image: url(../static/image/Log_Background.jpg); background-size: cover; background-position: center; background-repeat: no-repeat; height: 100vh;">
         <div class="container d-flex justify-content-center align-items-center h-100">
-            <form id="registerForm" class="p-4 border rounded shadow-lg" style="width: 400px; background-color: #f9f9f9;">
+            <form id="registerForm" class="p-4 border rounded shadow-lg" style="width: 400px; background-color: #f9f9f9;" method="post">
                 <h3 class="text-center mb-4">會員註冊</h3>
                 <div class="mb-3">
                     <label for="username" class="form-label">帳號：</label>
@@ -20,7 +20,7 @@
                     <input type="password" id="password" name="password" class="form-control" placeholder="輸入密碼" required>
                 </div>
                 <div class="text-center">
-                    <button type="button" class="btn btn-primary w-100" onclick="register()">註冊</button>
+                    <button type="submit" class="btn btn-primary w-100">註冊</button>
                 </div>
                 <div class="text-center mt-3">
                     <button type="reset" class="btn btn-secondary w-100">重設</button>
@@ -28,38 +28,6 @@
             </form>
         </div>
     </header>
-    <script>
-        async function register() {
-            const username = document.getElementById('username').value;
-            const password = document.getElementById('password').value;
-
-            if (!username || !password) {
-                alert('請輸入帳號和密碼');
-                return;
-            }
-
-            try {
-                const response = await fetch('/register', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ username, password }),
-                });
-
-                const result = await response.json();
-                if (response.ok) {
-                    alert('註冊成功！即將跳轉至首頁...');
-                    // 自動跳轉到首頁
-                    window.location.href = '/';
-                } else {
-                    alert(result.error || '註冊失敗');
-                }
-            } catch (error) {
-                alert('發生錯誤，請稍後再試');
-                console.error(error);
-            }
-        }
-    </script>
+    
 </body>
 </html>

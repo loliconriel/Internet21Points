@@ -3,7 +3,74 @@
 {% block title %}首頁{% endblock %}
 
 {% block content %}
+<div class="container text-center mt-5">
+    {% if session['username'] %}
+    <button id="add-money-btn" class="btn btn-primary" onclick="addMoney()">增加 300 金額</button>
+    {% else %}
+        <p>請先登入</p>
+    {% endif %}
+</div>
+
+<script>
+    async function loadMoney() {
+        const username = "{{ session['username'] }}"; // 獲取用戶名
+        if (!username) {
+            console.error('用戶未登入');
+            return;
+        }
+
+        try {
+            const response = await fetch(`http://127.0.0.1:5001/get_money?username=${username}`);
+            if (response.ok) {
+                const data = await response.json();
+                const currentMoney = data.money; // 獲取字串金額
+                document.getElementById('current-money').innerText = currentMoney;
+
+                // 將字串金額轉換為數字進行比較
+                const addMoneyBtn = document.getElementById('add-money-btn');
+                addMoneyBtn.disabled = parseInt(currentMoney) >= 300;
+            } else {
+                console.error('無法加載金額');
+            }
+        } catch (error) {
+            console.error('請求失敗', error);
+        }
+    }
+
+    async function addMoney() {
+        const username = "{{ session['username'] }}"; // 獲取用戶名
+        if (!username) {
+            alert('用戶未登入');
+            return;
+        }
+
+        try {
+            const response = await fetch('http://127.0.0.1:5001/add_money', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ username }),
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                const newMoney = data.money; // 獲取字串金額
+                document.getElementById('current-money').innerText = newMoney;
+
+                // 更新按鈕狀態
+                document.getElementById('add-money-btn').disabled = parseInt(newMoney) >= 300;
+            } else {
+                const errorData = await response.json();
+                alert('更新失敗：' + errorData.error);
+            }
+        } catch (error) {
+            console.error('請求失敗', error);
+        }
+    }
 
 
-
+    // 初始化金額
+    loadMoney();
+</script>
 {% endblock %}
