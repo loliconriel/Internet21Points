@@ -1,16 +1,19 @@
 import socket
 import threading
 import random
+import queue
 
 # 每個房間最多 4 名玩家
 MAX_PLAYERS = 4
 ROOM_COUNT = 4
 DECK_COUNT = 6
 
+
 # 初始化房間狀態和事件同步機制
 rooms = {f"room{i+1}": [] for i in range(ROOM_COUNT)}
 room_events = {f"room{i+1}": threading.Event() for i in range(ROOM_COUNT)}
 room_dealer_hands = {f"room{i+1}": [] for i in range(ROOM_COUNT)}  # 儲存莊家手牌
+hands = {}
 
 def shuffle_deck():
     """產生 6 副撲克牌並洗牌"""
@@ -92,6 +95,7 @@ def join_room(client_socket):
 
         # 如果房間人數達到最大值，觸發遊戲開始
         if len(rooms[room_choice]) == MAX_PLAYERS:
+            room_events[room_choice].clear()
             room_events[room_choice].set()
 
         return room_choice
@@ -103,20 +107,22 @@ def play_game(client_socket, room_choice):
     while True:
         # 如果房間人數滿了，觸發事件開始遊戲
         if len(rooms[room_choice]) == MAX_PLAYERS:
-            room_dealer_hands[room_choice] = [] 
-            hands = {}  # 清空玩家手牌記錄
-            room_events[room_choice].clear()
+            # **清空之前的遊戲狀態**
+            hands = {}
+            room_dealer_hands[room_choice] = []  # 清空莊家手牌
+            deck = shuffle_deck()  # 重新洗牌
+            room_events[room_choice].clear()  # 重置事件
             room_events[room_choice].set()
 
         # 等待遊戲開始
         room_events[room_choice].wait()
 
-        # 發牌邏輯
-        if not room_dealer_hands[room_choice]:  # 確保每輪莊家手牌一致
-            deck = shuffle_deck()
+        # 發牌邏輯：重新初始化莊家和玩家手牌
+        if not room_dealer_hands[room_choice]:
             room_dealer_hands[room_choice] = [deck.pop(), deck.pop()]
-
         dealer_hand = room_dealer_hands[room_choice]
+
+        # 清空並分發玩家手牌
         hands = {client: [deck.pop(), deck.pop()] for client in rooms[room_choice]}
 
         # 廣播莊家第一張牌和每個玩家的手牌
@@ -124,7 +130,7 @@ def play_game(client_socket, room_choice):
             client.sendall(f"莊家第一張牌：{dealer_hand[0]}\n".encode())
             client.sendall(f"你的牌：{hands[client]}\n".encode())
 
-        # 玩家回合依序進行
+        # 玩家回合與結算邏輯保持不變
         for client in rooms[room_choice]:
             while True:
                 client.sendall("是否加牌？(y/n): ".encode())
@@ -172,6 +178,7 @@ def play_game(client_socket, room_choice):
         if len(rooms[room_choice]) < MAX_PLAYERS:
             for client in rooms[room_choice]:
                 client.sendall("人數未滿，請稍等。\n".encode())
+
 
 
 def handle_client(client, addr):
