@@ -67,6 +67,7 @@ def determine_results(hands, dealer_hand):
 
     return results
 
+
 def join_room(client_socket):
     """讓玩家加入房間"""
     while True:
@@ -88,7 +89,13 @@ def join_room(client_socket):
         # 加入房間
         rooms[room_choice].append(client_socket)
         client_socket.sendall(f"成功加入 {room_choice}！等待其他玩家...\n".encode())
+
+        # 如果房間人數達到最大值，觸發遊戲開始
+        if len(rooms[room_choice]) == MAX_PLAYERS:
+            room_events[room_choice].set()
+
         return room_choice
+
 
 
 def play_game(client_socket, room_choice):
@@ -96,7 +103,9 @@ def play_game(client_socket, room_choice):
     while True:
         # 如果房間人數滿了，觸發事件開始遊戲
         if len(rooms[room_choice]) == MAX_PLAYERS:
-            room_dealer_hands[room_choice] = []
+            room_dealer_hands[room_choice] = [] 
+            hands = {}  # 清空玩家手牌記錄
+            room_events[room_choice].clear()
             room_events[room_choice].set()
 
         # 等待遊戲開始
@@ -154,7 +163,8 @@ def play_game(client_socket, room_choice):
             if choice.lower() != 'y':
                 client.sendall("離開遊戲。\n".encode())
                 rooms[room_choice].remove(client)
-                join_room(client)
+                # 獨立線程處理重新加入房間
+                threading.Thread(target=join_room, args=(client,)).start()
             else:
                 i += 1
 
