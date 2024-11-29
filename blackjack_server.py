@@ -19,7 +19,7 @@ room_player_hands = {f"room{i+1}": [] for i in range(ROOM_COUNT)}
 
 def shuffle_deck():
     """產生 6 副撲克牌並洗牌"""
-    deck = [i for i in range(1, 14) for _ in range(4)] * DECK_COUNT
+    deck = [str(i) + suit for i in range(1, 14) for suit in "CDHS"] * DECK_COUNT
     random.shuffle(deck)
     return deck
 
@@ -98,18 +98,22 @@ def join_room(client_socket, addr):
             client_socket.sendall("房間已滿，請選擇其他房間。\n".encode())
             continue
 
+        if len(rooms[room_choice]) == MAX_PLAYERS:
+            client_socket.sendall("房間已滿，遊戲即將開始！\n".encode())
+            threading.Thread(target=play_game, args=(room_choice, addr)).start()
+            return
         # 加入房間
-        rooms[room_choice].append(client_socket)
-        client_socket.sendall(f"成功加入 {room_choice}！等待其他玩家...\n".encode())
+        else:
+            rooms[room_choice].append(client_socket)
+            client_socket.sendall(f"成功加入 {room_choice}！等待其他玩家...\n".encode())
+            return
+        
+        
+            
 
-        return room_choice
-
-
-
-def play_game(client_socket, room_choice, addr):
+def play_game(room_choice, addr):
     """執行遊戲邏輯"""
     while True: 
-
         # 如果房間人數滿了，觸發事件開始遊戲
         if len(rooms[room_choice]) == MAX_PLAYERS:
             # **清空之前的遊戲狀態**
@@ -118,7 +122,6 @@ def play_game(client_socket, room_choice, addr):
             deck = shuffle_deck()  # 重新洗牌
             room_events[room_choice].clear()  # 重置事件
             room_events[room_choice].set()
-
         
         # 發牌邏輯：重新初始化莊家和玩家手牌
         if not room_dealer_hands[room_choice]:
@@ -149,7 +152,7 @@ def play_game(client_socket, room_choice, addr):
                     break
 
         # 等待所有玩家完成回合
-        if client_socket == rooms[room_choice][-1]:
+        if client == rooms[room_choice][-1]:
             room_events[room_choice].clear()
 
         # 莊家操作
@@ -186,13 +189,7 @@ def play_game(client_socket, room_choice, addr):
 def handle_client(client, addr):
     """處理每個連線玩家"""
     client.sendall("歡迎來到 21 點！\n".encode())
-
-    while True:
-        # 加入房間
-        room_choice = join_room(client, addr)
-        
-        # 進行遊戲
-        play_game(client, room_choice, addr)
+    room_choice = join_room(client, addr)
 
 
       
@@ -210,4 +207,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
