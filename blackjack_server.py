@@ -4,7 +4,7 @@ import random
 import queue
 
 # 每個房間最多 4 名玩家
-MAX_PLAYERS = 2
+MAX_PLAYERS = 4
 ROOM_COUNT = 4
 DECK_COUNT = 6
 lock = threading.Lock()
