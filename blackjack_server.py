@@ -1,21 +1,23 @@
 import socket
 import threading
 import random
+import queue
 
 # 每個房間最多 4 名玩家
-MAX_PLAYERS = 4
+MAX_PLAYERS = 2
 ROOM_COUNT = 4
 DECK_COUNT = 6
-
+lock = threading.Lock()
 
 # 初始化房間狀態和事件同步機制
+
 rooms = {f"room{i+1}": [] for i in range(ROOM_COUNT)}
 room_events = {f"room{i+1}": threading.Event() for i in range(ROOM_COUNT)}
 room_dealer_hands = {f"room{i+1}": [] for i in range(ROOM_COUNT)}
 room_player_hands = {f"room{i+1}": [] for i in range(ROOM_COUNT)}
 
-
-
+roomPlaying = {f"room{i+1}": False for i in range(ROOM_COUNT)}
+roomFull = {f"room{i+1}": False for i in range(ROOM_COUNT)}
 def shuffle_deck():
     """產生 6 副撲克牌並洗牌"""
     deck = [str(i) + suit for i in range(1, 14) for suit in "CDHS"] * DECK_COUNT
@@ -74,7 +76,7 @@ def determine_results(hands, dealer_hand):
 
 
 
-def join_room(client_socket, addr):
+def join_room(client_socket):
     """讓玩家加入房間"""
     while True:
         # 顯示 Lobby 狀態
@@ -100,8 +102,9 @@ def join_room(client_socket, addr):
 
 
 
-def play_game(client_socket, room_choice, addr):
+def play_game( room_choice):
     """執行遊戲邏輯"""
+
     while True: 
 
         # 如果房間人數滿了，觸發事件開始遊戲
@@ -117,13 +120,14 @@ def play_game(client_socket, room_choice, addr):
         # 發牌邏輯：重新初始化莊家和玩家手牌
         if not room_dealer_hands[room_choice]:
             room_dealer_hands[room_choice] = [deck.pop(), deck.pop()]
+        dealer_hand = room_dealer_hands[room_choice]
 
         # 清空並分發玩家手牌
         room_player_hands[room_choice] = {client: [deck.pop(), deck.pop()] for client in rooms[room_choice]}
 
         # 廣播莊家第一張牌和每個玩家的手牌
         for client in rooms[room_choice]:
-            client.sendall(f"莊家第一張牌：{room_dealer_hands[room_choice][0]}\n".encode())
+            client.sendall(f"莊家第一張牌：{dealer_hand[0]}\n".encode())
             client.sendall(f"你的牌：{room_player_hands[room_choice][client]}\n".encode())
 
         # 玩家回合與結算邏輯保持不變
@@ -142,17 +146,15 @@ def play_game(client_socket, room_choice, addr):
                 elif choice.lower() == 'n':
                     break
 
-        # 等待所有玩家完成回合
-        if client_socket == rooms[room_choice][-1]:
-            room_events[room_choice].clear()
+        
 
         # 莊家操作
-        room_dealer_hands[room_choice] = dealer_play(deck, room_dealer_hands[room_choice])
+        dealer_hand = dealer_play(deck, dealer_hand)
 
         # 比較結果並結算
-        result = determine_results(room_player_hands[room_choice], room_dealer_hands[room_choice])
+        result = determine_results(room_player_hands[room_choice], dealer_hand)
         for client in rooms[room_choice]:
-            client.sendall(f"遊戲結束！莊家牌：{room_dealer_hands[room_choice]}\n".encode())
+            client.sendall(f"遊戲結束！莊家牌：{dealer_hand}\n".encode())
             client.sendall(f"你的結果：{result[client]}\n".encode())
 
         # 是否繼續遊戲
@@ -164,7 +166,8 @@ def play_game(client_socket, room_choice, addr):
             if choice.lower() != 'y':
                 client.sendall("離開遊戲。\n".encode())
                 rooms[room_choice].remove(client)
-                threading.Thread(target=handle_client, args=(client,addr)).start()
+                threading.Thread(target=handle_client, args=(client,)).start()
+                
             else:
                 i += 1
 
@@ -173,34 +176,48 @@ def play_game(client_socket, room_choice, addr):
             for client in rooms[room_choice]:
                 msg = f"人數未滿，請稍等。\n目前玩家({len(rooms[room_choice])}/{MAX_PLAYERS})\n"
                 client.sendall(msg.encode())
-            room_events[room_choice].wait()
+            roomFull[room_choice] = False
+            roomPlaying[room_choice] = False
+            break
 
 
 
-def handle_client(client, addr):
+def handle_client(client):
     """處理每個連線玩家"""
     client.sendall("歡迎來到 21 點！\n".encode())
-
+    room_choice = join_room(client)
     while True:
-        # 加入房間
-        room_choice = join_room(client, addr)
+        if len(rooms[room_choice]) == MAX_PLAYERS:
+            with lock:
+                roomFull[room_choice] = True
+            client.sendall(f"{room_choice}\n".encode())
+            break
+    client.sendall("Game Start@\n".encode())
         
-        # 進行遊戲
-        play_game(client, room_choice, addr)
+        
 
-
-      
-def main():
-    """主伺服器函數"""
+def serverThread():
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.bind(("", 8888))
     server.listen(ROOM_COUNT * MAX_PLAYERS)
-    print("伺服器啟動中，等待玩家連線...")
-
     while True:
         client_socket, addr = server.accept()
         print(f"玩家 {addr} 已連線。")
-        threading.Thread(target=handle_client, args=(client_socket, addr)).start()
+        threading.Thread(target=handle_client, args=(client_socket,)).start()
+      
+def main():
+    """主伺服器函數"""
+    
+    print("伺服器啟動中，等待玩家連線...")
+    threading.Thread(target=serverThread,daemon = True).start()
+    while True:
+        for room, is_full in roomFull.items():
+            if is_full and not roomPlaying[room]:  # 確保遊戲未在該房間進行中
+                roomPlaying[room] = True  # 標記遊戲開始
+                threading.Thread(target=play_game, args=(room,)).start()
+            
+        
+        
 
 if __name__ == "__main__":
     main()
