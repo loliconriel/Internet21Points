@@ -1,5 +1,6 @@
 import requests
 import secrets
+import threading
 from flask import Flask, render_template, session, redirect, url_for, request, flash
 
 app = Flask(__name__)
@@ -85,6 +86,10 @@ def logout():
     """登出並重定向到首頁"""
     session.clear()
     return redirect(url_for('home'))
+
+@app.route('/blackjackRoom')
+def blackjackRoom():
+    return render_template('/blackjackRoom.html')
 
 
 if __name__ == "__main__":

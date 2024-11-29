@@ -55,6 +55,12 @@
     font-size: 13px;
     text-decoration: none;
 }
+a{
+    text-decoration: none;
+}
+a:hover,a:focus{
+    text-decoration: none;
+}
 
 a.navbar-brand {
     text-decoration: none; /* 移除下劃線 */
@@ -63,6 +69,32 @@ a.navbar-brand:hover,
 a.navbar-brand:focus {
     text-decoration: none; /* 確保 hover 或 focus 時也不顯示下劃線 */
 }
+
+.button-image {
+    width: 100px;
+    height: 100px;
+    object-fit: cover;
+    margin-bottom: 10px;
+}
+.basebtn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background-color: #f8f9fa;
+    padding: 10px;
+    cursor: pointer;
+    transition: transform 0.2s ease-in-out;
+}
+.basebtn:hover {
+    transform: scale(1.1);
+}
+.basebtn p {
+    margin: 0;
+    font-size: 14px;
+}
+
 
 @media (max-width: 1200px) {
     .card-text {

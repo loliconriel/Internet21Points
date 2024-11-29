@@ -4,6 +4,43 @@
 
 {% block content %}
 <div class="container text-center mt-5">
+    <div class="row">
+        <div class="col-md-3">
+            <a href="/blackjackRoom" target="_blank">
+                <button class="basebtn btn-light">
+                    <img src="../static/image/1434.png" alt="Button 1" class="button-image">
+                    <p>21點</p>
+                </button>
+            </a>
+        </div>
+        <div class="col-md-3">
+            <a href="https://example.com/page2" target="_blank">
+                <button class="basebtn btn-light">
+                    <img src="/static/images/image2.png" alt="Button 2" class="button-image">
+                    <p>網站 2</p>
+                </button>
+            </a>
+        </div>
+        <div class="col-md-3">
+            <a href="https://example.com/page3" target="_blank">
+                <button class="basebtn btn-light">
+                    <img src="/static/images/image3.png" alt="Button 3" class="button-image">
+                    <p>網站 3</p>
+                </button>
+            </a>
+        </div>
+        <div class="col-md-3">
+            <a href="https://example.com/page4" target="_blank">
+                <button class="basebtn btn-light">
+                    <img src="/static/images/image4.png" alt="Button 4" class="button-image">
+                    <p>網站 4</p>
+                </button>
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="container text-center mt-5">
     {% if session['username'] %}
     <button id="add-money-btn" class="btn btn-primary" onclick="addMoney()">增加 300 金額</button>
     {% else %}
