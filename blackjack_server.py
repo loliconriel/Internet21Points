@@ -171,9 +171,7 @@ def play_game(client_socket, room_choice, addr):
             if choice.lower() != 'y':
                 client.sendall("離開遊戲。\n".encode())
                 rooms[room_choice].remove(client)
-                client.close()
-                # 獨立線程處理重新加入房間
-                #threading.Thread(target=handle_client, args=(client,addr)).start()
+                threading.Thread(target=handle_client, args=(client,addr)).start()
             else:
                 i += 1
 
