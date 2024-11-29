@@ -153,7 +153,7 @@ def play_game(client_socket, room_choice, addr):
             room_events[room_choice].clear()
 
         # 莊家操作
-        dealer_hand = dealer_play(deck, room_dealer_hands[room_choice])
+        room_dealer_hands[room_choice] = dealer_play(deck, room_dealer_hands[room_choice])
 
         # 比較結果並結算
         result = determine_results(room_player_hands[room_choice], room_dealer_hands[room_choice])
