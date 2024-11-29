@@ -114,7 +114,7 @@ def play_game(client_socket, room_choice, addr):
         if len(rooms[room_choice]) == MAX_PLAYERS:
             # **清空之前的遊戲狀態**
             room_player_hands[room_choice].clear()  # 清空玩家手牌
-            room_dealer_hands[room_choice] = []  # 清空莊家手牌
+            room_dealer_hands[room_choice].clear()  # 清空莊家手牌
             deck = shuffle_deck()  # 重新洗牌
             room_events[room_choice].clear()  # 重置事件
             room_events[room_choice].set()
@@ -123,14 +123,13 @@ def play_game(client_socket, room_choice, addr):
         # 發牌邏輯：重新初始化莊家和玩家手牌
         if not room_dealer_hands[room_choice]:
             room_dealer_hands[room_choice] = [deck.pop(), deck.pop()]
-        dealer_hand = room_dealer_hands[room_choice]
 
         # 清空並分發玩家手牌
         room_player_hands[room_choice] = {client: [deck.pop(), deck.pop()] for client in rooms[room_choice]}
 
         # 廣播莊家第一張牌和每個玩家的手牌
         for client in rooms[room_choice]:
-            client.sendall(f"莊家第一張牌：{dealer_hand[0]}\n".encode())
+            client.sendall(f"莊家第一張牌：{room_dealer_hands[room_choice][0]}\n".encode())
             client.sendall(f"你的牌：{room_player_hands[room_choice][client]}\n".encode())
 
         # 玩家回合與結算邏輯保持不變
@@ -154,12 +153,12 @@ def play_game(client_socket, room_choice, addr):
             room_events[room_choice].clear()
 
         # 莊家操作
-        dealer_hand = dealer_play(deck, dealer_hand)
+        dealer_hand = dealer_play(deck, room_dealer_hands[room_choice])
 
         # 比較結果並結算
-        result = determine_results(room_player_hands[room_choice], dealer_hand)
+        result = determine_results(room_player_hands[room_choice], room_dealer_hands[room_choice])
         for client in rooms[room_choice]:
-            client.sendall(f"遊戲結束！莊家牌：{dealer_hand}\n".encode())
+            client.sendall(f"遊戲結束！莊家牌：{room_dealer_hands[room_choice]}\n".encode())
             client.sendall(f"你的結果：{result[client]}\n".encode())
 
         # 是否繼續遊戲
