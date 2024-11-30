@@ -87,9 +87,9 @@ def logout():
     session.clear()
     return redirect(url_for('home'))
 
-@app.route('/blackjackRoom')
+@app.route('/blackjackLobby')
 def blackjackRoom():
-    return render_template('/blackjackRoom.html')
+    return render_template('/blackjackLobby.html')
 
 
 if __name__ == "__main__":
