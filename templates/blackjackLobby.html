@@ -10,47 +10,45 @@
         </div>
         <div class="card-body">
             <ul class="list-group">
-                <!-- 範例房間項目 -->
+                <!-- 動態渲染房間列表 -->
+                {% for blackJackRoom in blackJackRooms %}
                 <li class="list-group-item">
-                    <a href="/room/1" class="text-decoration-none">房間 1</a>
+                    <a href="http://127.0.0.1:5001/blackjackblackJackRoom/{{ blackJackRoom.id }}" class="text-decoration-none">
+                        {{ blackJackRoom.name }} (人數: {{ blackJackRoom.current_players }} / {{ blackJackRoom.capacity }})<br>
+                        {{ blackJackRoom.description }}
+                    </a>
                 </li>
-                <li class="list-group-item">
-                    <a href="/room/2" class="text-decoration-none">房間 2</a>
-                </li>
-                <li class="list-group-item">
-                    <a href="/room/3" class="text-decoration-none">房間 3</a>
-                </li>
-                <!-- 可用後端動態渲染生成房間項目 -->
+                {% endfor %}
             </ul>
         </div>
         <div class="card-footer text-end">
             <!-- 創建房間按鈕 -->
-            <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#createRoomModal">創建房間</button>
+            <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#createBlackJackRoomModal">創建房間</button>
         </div>
     </div>
 </div>
 
 <!-- 創建房間模態框 -->
-<div class="modal fade" id="createRoomModal" tabindex="-1" aria-labelledby="createRoomModalLabel" aria-hidden="true">
+<div class="modal fade" id="createBlackJackRoomModal" tabindex="-1" aria-labelledby="createBlackJackRoomModalLabel" aria-hidden="true" style="display: none;">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="createRoomModalLabel">創建新房間</h5>
+                <h5 class="modal-title" id="createBlackJackRoomModalLabel">創建新房間</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <form id="createRoomForm">
+                <form id="createBlackJackRoomForm">
                     <div class="mb-3">
-                        <label for="roomName" class="form-label">房間名稱</label>
-                        <input type="text" class="form-control" id="roomName" name="roomName" required>
+                        <label for="blackJackRoomName" class="form-label">房間名稱</label>
+                        <input type="text" class="form-control" id="blackJackRoomName" name="blackJackRoomName" required>
                     </div>
                     <div class="mb-3">
-                        <label for="roomCapacity" class="form-label">房間人數上限</label>
-                        <input type="number" class="form-control" id="roomCapacity" name="roomCapacity" required>
+                        <label for="blackJackRoomCapacity" class="form-label">房間人數上限</label>
+                        <input type="number" class="form-control" id="blackJackRoomCapacity" name="blackJackRoomCapacity" value="1" required max="6" min = "1">
                     </div>
                     <div class="mb-3">
-                        <label for="roomDescription" class="form-label">房間描述</label>
-                        <textarea class="form-control" id="roomDescription" name="roomDescription" rows="3"></textarea>
+                        <label for="blackJackRoomDescription" class="form-label">房間描述</label>
+                        <textarea class="form-control" id="blackJackRoomDescription" name="blackJackRoomDescription" rows="3"></textarea>
                     </div>
                     <button type="submit" class="btn btn-primary">提交</button>
                 </form>
@@ -58,4 +56,45 @@
         </div>
     </div>
 </div>
+
+<script>
+    document.getElementById('createBlackJackRoomForm').addEventListener('submit', function(event) {
+        event.preventDefault(); // 防止表單的默認提交行為
+        
+        const blackJackRoomName = document.getElementById('blackJackRoomName').value;
+        const blackJackRoomCapacity = document.getElementById('blackJackRoomCapacity').value;
+        const blackJackRoomDescription = document.getElementById('blackJackRoomDescription').value;
+        
+        // 限制人數上限
+        const maxCapacity = 6;
+        if (blackJackRoomCapacity > maxCapacity) {
+            alert(`房間人數上限為 ${maxCapacity}，請重新輸入`);
+            return; // 不提交表單
+        }
+        
+        // 假設有一個 API 用來創建房間
+        fetch('http://127.0.0.1:5001/createBlackJackRoom', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                name: blackJackRoomName,
+                capacity: blackJackRoomCapacity,
+                description: blackJackRoomDescription
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            // 可以根據後端的回應處理結果
+            alert('房間創建成功');
+            location.reload();  // 重新加載頁面來顯示新房間
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('創建房間失敗');
+        });
+    });
+    </script>
+    
 {% endblock %}

@@ -12,6 +12,17 @@
         <div class="container d-flex justify-content-center align-items-center h-100">
             <form id="registerForm" class="p-4 border rounded shadow-lg" style="width: 400px; background-color: #f9f9f9;" method="post">
                 <h3 class="text-center mb-4">會員註冊</h3>
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                <div>
+                    {% for category, message in messages %}
+                    <div class="alert alert-{{ category }}" role="alert">
+                        {{ message }}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                {% endwith %}
                 <div class="mb-3">
                     <label for="username" class="form-label">帳號：</label>
                     <input type="text" id="username" name="username" class="form-control" placeholder="輸入帳號" required>

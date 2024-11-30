@@ -1,10 +1,15 @@
 import sqlite3
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify,render_template
 from flask_cors import CORS
 
 app = Flask(__name__)
 DATABASE = 'user_data.db'
-CORS(app)
+CORS(app, resources={r"/*": {"origins": "http://127.0.0.1:5000"}})
+blackJackRoomList = [
+    {'id': 1, 'name': '房間 1', 'capacity': 4, 'current_players': 0, 'description': '這是房間1的描述'},
+    {'id': 2, 'name': '房間 2', 'capacity': 6, 'current_players': 0, 'description': '這是房間2的描述'},
+    {'id': 3, 'name': '房間 3', 'capacity': 4, 'current_players': 0, 'description': '這是房間3的描述'}
+]
 # 初始化資料庫並創建表
 def init_db():
     with sqlite3.connect(DATABASE) as conn:
@@ -146,7 +151,36 @@ def get_money():
                 return jsonify({'error': '用戶不存在'}), 404
     except sqlite3.Error as e:
         return jsonify({'error': f'資料庫錯誤: {str(e)}'}), 500
-    
+@app.route('/blackjackLobby',methods=['GET'])
+def blackjackLobby():
+    # 返回房間列表
+    return jsonify({'blackJackRooms' : blackJackRoomList}), 200
+# 動態生成房間頁面
+@app.route('/blackjackRoom/<int:blackJackRoomID>')
+def room_page(blackJackRoomID):
+    room = next((r for r in blackJackRoomList if r['id'] == blackJackRoomID), None)
+    if room is None:
+        return jsonify({'error': '房間不存在'}), 404
+    return render_template('room.html', room=room)
+@app.route('/createBlackJackRoom', methods=['POST'])
+def create_room():
+    global blackJackRoomList
+    data = request.json
+
+    # 創建新的房間資料
+    blackJackRoomID = len(blackJackRoomList) + 1
+    room = {
+        'id': blackJackRoomID,
+        'name': data.get('name', f'房間 {blackJackRoomID}'),
+        'description': data.get('description', '這是一個新的房間'),
+        'capacity': data.get('max_players', 4),  # 預設最大人數為4
+        'current_players': 0  # 新房間初始人數為0
+    }
+    print(room)
+    # 將房間添加到列表
+    blackJackRoomList.append(room)
+    return jsonify({'message': '房間創建成功', 'room': room}), 201
+
 if __name__ == "__main__":
     init_db()  # 啟動應用時初始化資料庫
     app.run(debug=True, port=5001)  # 假設後端服務器運行在 5001 端口

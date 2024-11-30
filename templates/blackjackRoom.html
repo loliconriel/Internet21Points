@@ -3,5 +3,9 @@
 {% block title %}21房間頁面{% endblock %}
 
 {% block content %}
-
+<div class="container mt-4">
+    <h1>房間 {{ blackJackRoom.id }} - {{ blackJackRoom.name }}</h1>
+    <p>描述: {{ blackJackRoom.description }}</p>
+    <p>人數上限: {{ blackJackRoom.capacity }}</p>
+</div>
 {% endblock %}

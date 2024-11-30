@@ -88,8 +88,14 @@ def logout():
     return redirect(url_for('home'))
 
 @app.route('/blackjackLobby')
-def blackjackRoom():
-    return render_template('/blackjackLobby.html')
+def blackjackLobby():
+    try:
+        response = requests.get(f'{API_URL}/blackjackLobby')
+        print(response)
+        blackjackRooms = response.json().get('blackJackRooms')
+        return render_template('/blackjackLobby.html',blackJackRooms = blackjackRooms)
+    except Exception as e:
+        return str(e)
 
 
 if __name__ == "__main__":

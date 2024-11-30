@@ -95,7 +95,9 @@ a.navbar-brand:focus {
     font-size: 14px;
 }
 
-
+.modal-backdrop {
+    display: none !important;  /* 隱藏遮罩層 */
+}
 @media (max-width: 1200px) {
     .card-text {
         font-size: 0.8rem;
