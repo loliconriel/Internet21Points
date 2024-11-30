@@ -13,7 +13,7 @@
                 <!-- 動態渲染房間列表 -->
                 {% for blackJackRoom in blackJackRooms %}
                 <li class="list-group-item">
-                    <a href="http://127.0.0.1:5001/blackjackblackJackRoom/{{ blackJackRoom.id }}" class="text-decoration-none">
+                    <a href="blackjackRoom/{{ blackJackRoom.id }}" class="text-decoration-none">
                         {{ blackJackRoom.name }} (人數: {{ blackJackRoom.current_players }} / {{ blackJackRoom.capacity }})<br>
                         {{ blackJackRoom.description }}
                     </a>
@@ -72,7 +72,7 @@
             return; // 不提交表單
         }
         
-        // 假設有一個 API 用來創建房間
+        
         fetch('http://127.0.0.1:5001/createBlackJackRoom', {
             method: 'POST',
             headers: {
@@ -86,9 +86,10 @@
         })
         .then(response => response.json())
         .then(data => {
+            console.log(data.blackJackRoom.id);
             // 可以根據後端的回應處理結果
             alert('房間創建成功');
-            location.reload();  // 重新加載頁面來顯示新房間
+            window.location.href = `/blackjackRoom/${data.blackJackRoom.id}`;
         })
         .catch(error => {
             console.error('Error:', error);

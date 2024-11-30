@@ -1,7 +1,7 @@
 import requests
 import secrets
 import threading
-from flask import Flask, render_template, session, redirect, url_for, request, flash
+from flask import Flask, render_template, session, redirect, url_for, request, flash,jsonify
 
 app = Flask(__name__)
 app.secret_key = secrets.token_hex(32)
@@ -91,11 +91,36 @@ def logout():
 def blackjackLobby():
     try:
         response = requests.get(f'{API_URL}/blackjackLobby')
-        print(response)
         blackjackRooms = response.json().get('blackJackRooms')
         return render_template('/blackjackLobby.html',blackJackRooms = blackjackRooms)
     except Exception as e:
         return str(e)
+@app.route('/blackjackRoom/<int:blackJackRoomID>')
+def blackjackRoom_page(blackJackRoomID):
+    try:
+        response = requests.get(f'{API_URL}/blackjackRoom/{blackJackRoomID}')
+        if response.status_code == 404:
+            return redirect(url_for('home'))
+        blackJackRoom = response.json().get('blackJackRoom')
+        if blackJackRoom is None:
+            return redirect(url_for('home'))
+        return render_template('/blackjackRoom.html', blackJackRoom=blackJackRoom)
+
+    except:
+        return redirect(url_for('home'))
+@app.route('/blackjackRoom/<int:blackJackRoomID>/get')
+def blackjackRoom_get(blackJackRoomID):
+    try:
+        response = requests.get(f'{API_URL}/blackjackRoom/{blackJackRoomID}')
+        if response.status_code == 404:
+            return redirect(url_for('home'))
+        blackJackRoom = response.json().get('blackJackRoom')
+        if blackJackRoom is None:
+            return redirect(url_for('home'))
+        return jsonify({'blackJackRoom': blackJackRoom})
+
+    except:
+        return redirect(url_for('home'))
 
 
 if __name__ == "__main__":

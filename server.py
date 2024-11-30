@@ -10,6 +10,22 @@ blackJackRoomList = [
     {'id': 2, 'name': '房間 2', 'capacity': 6, 'current_players': 0, 'description': '這是房間2的描述'},
     {'id': 3, 'name': '房間 3', 'capacity': 4, 'current_players': 0, 'description': '這是房間3的描述'}
 ]
+blackJackRoomList = [
+    {
+        'id': 1,
+        'name': '房間 1',
+        'capacity': 4,
+        'current_players': 0,
+        'description': '這是房間1的描述',
+        'players': [
+            # 範例玩家資料
+            # {'username': 'player1', 'seat': 1, 'bet': 0, 'hand': [], 'points': 0, 'last_action_time': None}
+        ],
+        'dealer': {'hand': [], 'points': 0},  # 莊家的手牌與點數
+        'current_turn': None,  # 當前輪到的玩家
+        'turn_start_time': None  # 當前玩家開始計時的時間
+    },
+]
 # 初始化資料庫並創建表
 def init_db():
     with sqlite3.connect(DATABASE) as conn:
@@ -155,13 +171,17 @@ def get_money():
 def blackjackLobby():
     # 返回房間列表
     return jsonify({'blackJackRooms' : blackJackRoomList}), 200
+
 # 動態生成房間頁面
-@app.route('/blackjackRoom/<int:blackJackRoomID>')
+@app.route('/blackjackRoom/<int:blackJackRoomID>', methods=['GET'])
 def room_page(blackJackRoomID):
-    room = next((r for r in blackJackRoomList if r['id'] == blackJackRoomID), None)
-    if room is None:
+    blackJackRoom = next((r for r in blackJackRoomList if r['id'] == blackJackRoomID), None)
+    
+    if blackJackRoom is None:
         return jsonify({'error': '房間不存在'}), 404
-    return render_template('room.html', room=room)
+    
+    return jsonify({'blackJackRoom': blackJackRoom})
+
 @app.route('/createBlackJackRoom', methods=['POST'])
 def create_room():
     global blackJackRoomList
@@ -169,17 +189,16 @@ def create_room():
 
     # 創建新的房間資料
     blackJackRoomID = len(blackJackRoomList) + 1
-    room = {
+    blackJackRoom = {
         'id': blackJackRoomID,
         'name': data.get('name', f'房間 {blackJackRoomID}'),
         'description': data.get('description', '這是一個新的房間'),
         'capacity': data.get('max_players', 4),  # 預設最大人數為4
         'current_players': 0  # 新房間初始人數為0
     }
-    print(room)
     # 將房間添加到列表
-    blackJackRoomList.append(room)
-    return jsonify({'message': '房間創建成功', 'room': room}), 201
+    blackJackRoomList.append(blackJackRoom)
+    return jsonify({'message': '房間創建成功', 'blackJackRoom': blackJackRoom}), 201
 
 if __name__ == "__main__":
     init_db()  # 啟動應用時初始化資料庫
