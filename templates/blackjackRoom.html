@@ -1,91 +1,80 @@
 {% extends "base.html" %}
 
-{% block title %}21房間頁面{% endblock %}
+{% block title %}21點房間頁面{% endblock %}
 
 {% block content %}
-<!-- 背景區域 -->
-<div class="container-fluid" style="background-image: url('../static/image/blackjackBackground.jpg'); background-size: cover; background-position: center; padding-top: 50px;height: 100%;">
+<div class="container-fluid" style="background-image: url('../static/image/blackjackBackground.jpg'); background-size: cover; background-position: center; padding-top: 50px; height: 100%;">
     <!-- 房間信息 -->
     <div class="container text-center">
         <h5 id="room-info" class="text-white">
-            房間: {{ blackJackRoom.name }} 描述: {{ blackJackRoom.description }} 人數上限: {{ blackJackRoom.capacity }}
+            房間: {{ blackJackRoom.name }} 描述: {{ blackJackRoom.description }} 人數上限: {{ blackJackRoom.capacity }} 當前玩家: {{ blackJackRoom.current_players }}
         </h5>
     </div>
 
-    <!-- 按鈕區域 -->
+    <!-- 玩家座位按鈕 -->
     <div id="player-buttons" class="container text-center mt-4">
-        <!-- 按鈕將動態生成 -->
+        <!-- 按鈕將由 JavaScript 動態生成 -->
     </div>
 </div>
 
-<!-- 引入 jQuery -->
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-
 <script>
-    let blackJackRoomID = "{{ blackJackRoom.id }}";
-    const capacity = "{{ blackJackRoom.capacity }}";
+    const blackJackRoomID = "{{ blackJackRoom.id }}";
     const currentUser = "{{ session['username'] }}";
 
     function createButtons(occupiedButtons) {
         const container = $('#player-buttons');
         container.empty();
 
-        for (let i = 1; i <= capacity; i++) {
-            // 如果按鈕已被佔用，顯示玩家名字，禁用按鈕
-            if (occupiedButtons[i]) {
-                const button = $(`<button id="button-${i}" class="btn btn-secondary m-2" disabled>${occupiedButtons[i]}</button>`);
-                container.append(button);
-            } else {
-                // 若按鈕未被佔用，生成可用按鈕
-                const button = $(`<button id="button-${i}" class="btn btn-primary m-2">位置 ${i}</button>`);
+        for (let i = 1; i <= "{{ blackJackRoom.capacity }}"; i++) {
+            const playerName = occupiedButtons[i] || null;
+
+            const button = $('<button>')
+                .attr('id', `button-${i}`)
+                .addClass('btn m-2')
+                .addClass(playerName ? 'btn-secondary' : 'btn-primary')
+                .text(playerName || `位置 ${i}`)
+                .prop('disabled', !!playerName);
+
+            if (!playerName) {
                 button.on('click', function () {
-                    // 確認玩家只能選擇一個位置
-                    if (Object.values(occupiedButtons).includes(currentUser)) {
-                        alert("您已選擇過位置，無法再次點擊！");
+                    if (!currentUser) {
+                        alert("請先登入！");
                         return;
                     }
 
-                    // 更新按鈕狀態，發送請求
-                    $(this).text(currentUser).prop('disabled', true);
-                    occupiedButtons[i] = currentUser;
-
                     $.ajax({
-                        url: `/blackjackRoom/${blackJackRoomID}/player/${i}/update`,
+                        url: `/blackjackRoom/${blackJackRoomID}/player/${i}/action`,
                         method: 'POST',
                         contentType: 'application/json',
-                        data: JSON.stringify({ playerName: currentUser }),
-                        success: function () {
-                            console.log(`按鈕 ${i} 已由玩家 ${currentUser} 點擊並更新到伺服器`);
+                        data: JSON.stringify({ playerName: currentUser, action: 'sit' }),
+                        success: function (response) {
+                            alert('成功入座！');
+                            updateButtons();
                         },
-                        error: function () {
-                            console.log(`按鈕 ${i} 更新失敗`);
+                        error: function (xhr) {
+                            alert(xhr.responseJSON.error || '操作失敗');
                         }
                     });
                 });
-                container.append(button);
             }
+
+            container.append(button);
         }
     }
 
-    // 初次加載和更新按鈕狀態
     function updateButtons() {
-        $.getJSON(`/blackjackRoom/${blackJackRoomID}/get`, (data) => {
-            if (data.blackJackRoom) {
-                $('#room-info').text(`房間: ${data.blackJackRoom.name} 描述: ${data.blackJackRoom.description} 人數上限: ${data.blackJackRoom.capacity}`);
-                createButtons(data.occupiedButtons || {});
-            } else {
-                console.log('無法更新資料');
-            }
+        $.get(`/blackjackRoom/${blackJackRoomID}/get`, function (data) {
+            const occupiedButtons = data.occupiedButtons || {};
+            createButtons(occupiedButtons);
         }).fail(function () {
-            console.log('更新資料失敗');
+            alert('無法更新座位資訊');
         });
     }
 
-    // 定期更新按鈕狀態
-    setInterval(updateButtons, 5000);
-
-    // 初次加載時調用
-    updateButtons();
+    $(document).ready(function () {
+        updateButtons();
+        setInterval(updateButtons, 5000);
+    });
 </script>
-
 {% endblock %}

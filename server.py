@@ -6,11 +6,6 @@ app = Flask(__name__)
 DATABASE = 'user_data.db'
 CORS(app, resources={r"/*": {"origins": "http://127.0.0.1:5000"}})
 blackJackRoomList = [
-    {'id': 1, 'name': '房間 1', 'capacity': 4, 'current_players': 0, 'description': '這是房間1的描述'},
-    {'id': 2, 'name': '房間 2', 'capacity': 6, 'current_players': 0, 'description': '這是房間2的描述'},
-    {'id': 3, 'name': '房間 3', 'capacity': 4, 'current_players': 0, 'description': '這是房間3的描述'}
-]
-blackJackRoomList = [
     {
         'id': 1,
         'name': '房間 1',
@@ -25,6 +20,7 @@ blackJackRoomList = [
         'current_turn': None,  # 當前輪到的玩家
         'turn_start_time': None  # 當前玩家開始計時的時間
     },
+    # 其他房間資料結構類似
 ]
 # 初始化資料庫並創建表
 def init_db():
@@ -199,6 +195,71 @@ def create_room():
     # 將房間添加到列表
     blackJackRoomList.append(blackJackRoom)
     return jsonify({'message': '房間創建成功', 'blackJackRoom': blackJackRoom}), 201
+
+@app.route('/blackjackRoom/<int:blackJackRoomID>/player/<int:seat>/action', methods=['POST'])
+def blackjackRoom_player_action(blackJackRoomID, seat):
+    """
+    處理玩家對座位的操作，包括入座、離座和下注。
+    """
+    data = request.get_json()
+    player_name = data.get('playerName')
+    action = data.get('action')
+    amount = data.get('amount', 0)  # 預設下注金額為 0
+
+    # 找到房間
+    blackJackRoom = next((room for room in blackJackRoomList if room['id'] == blackJackRoomID), None)
+    if not blackJackRoom:
+        return jsonify({'error': '房間不存在'}), 404
+
+    # 處理不同操作
+    if action == 'sit':
+        # 確認座位是否被占用
+        if any(player['seat'] == seat for player in blackJackRoom['players']):
+            return jsonify({'error': '座位已被佔用'}), 400
+
+        # 確認玩家是否已經選擇其他座位
+        if any(player['username'] == player_name for player in blackJackRoom['players']):
+            return jsonify({'error': '玩家已在其他座位上'}), 400
+
+        # 記錄玩家座位
+        blackJackRoom['players'].append({'username': player_name, 'seat': seat, 'bet': 0})
+        blackJackRoom['current_players'] += 1
+
+    elif action == 'leave':
+        # 移除玩家的座位記錄
+        blackJackRoom['players'] = [player for player in blackJackRoom['players'] if player['username'] != player_name]
+        blackJackRoom['current_players'] -= 1
+
+    elif action == 'bet':
+        # 設定玩家的下注金額
+        for player in blackJackRoom['players']:
+            if player['username'] == player_name:
+                player['bet'] = amount
+                break
+        else:
+            return jsonify({'error': '玩家尚未入座'}), 400
+    else:
+        return jsonify({'error': '未知操作'}), 400
+
+    # 返回當前房間的座位占用狀態
+    occupied_buttons = {player['seat']: player['username'] for player in blackJackRoom['players']}
+    return jsonify({'message': f'{action} 動作已完成', 'occupiedButtons': occupied_buttons}), 200
+
+
+@app.route('/blackjackRoom/<int:blackJackRoomID>/get', methods=['GET'])
+def get_blackjack_room_state(blackJackRoomID):
+    """
+    獲取房間狀態，包括座位占用資訊。
+    """
+    blackJackRoom = next((room for room in blackJackRoomList if room['id'] == blackJackRoomID), None)
+    if not blackJackRoom:
+        return jsonify({'error': '房間不存在'}), 404
+
+    occupied_buttons = {player['seat']: player['username'] for player in blackJackRoom['players']}
+    return jsonify({'blackJackRoom': blackJackRoom, 'occupiedButtons': occupied_buttons})
+
+
+
 
 if __name__ == "__main__":
     init_db()  # 啟動應用時初始化資料庫

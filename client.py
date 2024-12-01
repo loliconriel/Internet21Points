@@ -108,19 +108,29 @@ def blackjackRoom_page(blackJackRoomID):
 
     except:
         return redirect(url_for('home'))
-@app.route('/blackjackRoom/<int:blackJackRoomID>/get')
-def blackjackRoom_get(blackJackRoomID):
-    try:
-        response = requests.get(f'{API_URL}/blackjackRoom/{blackJackRoomID}')
-        if response.status_code == 404:
-            return redirect(url_for('home'))
-        blackJackRoom = response.json().get('blackJackRoom')
-        if blackJackRoom is None:
-            return redirect(url_for('home'))
-        return jsonify({'blackJackRoom': blackJackRoom})
+@app.route('/blackjackRoom/<int:blackJackRoomID>/player/<int:seat>/action', methods=['POST'])
+def blackjackRoom_player_action(blackJackRoomID, seat):
+    data = request.get_json()
+    player_name = data.get('playerName')
+    action = data.get('action')
+    amount = data.get('amount', 0)  # 預設下注金額為 0
 
-    except:
-        return redirect(url_for('home'))
+    # 轉發到 Server
+    response = requests.post(f'{API_URL}/blackjackRoom/{blackJackRoomID}/player/{seat}/action', json={
+        'playerName': player_name,
+        'action': action,
+        'amount': amount
+    })
+    return jsonify(response.json()), response.status_code
+
+@app.route('/blackjackRoom/<int:blackJackRoomID>/get', methods=['GET'])
+def blackjack_room_get(blackJackRoomID):
+    """獲取房間狀態"""
+    try:
+        response = requests.get(f'{API_URL}/blackjackRoom/{blackJackRoomID}/get')
+        return jsonify(response.json()), response.status_code
+    except Exception as e:
+        return jsonify({'error': f'獲取房間狀態失敗：{e}'}), 500
 
 
 if __name__ == "__main__":
