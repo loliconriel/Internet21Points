@@ -60,6 +60,10 @@
 <script>
     document.getElementById('createBlackJackRoomForm').addEventListener('submit', function(event) {
         event.preventDefault(); // 防止表單的默認提交行為
+        if(!"{{ session['username'] }}"){
+            alert('登入才能創建房間');
+            return;
+        }
         
         const blackJackRoomName = document.getElementById('blackJackRoomName').value;
         const blackJackRoomCapacity = document.getElementById('blackJackRoomCapacity').value;

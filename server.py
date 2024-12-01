@@ -1,8 +1,11 @@
 import sqlite3
+import time
+import threading
 from flask import Flask, request, jsonify,render_template
 from flask_cors import CORS
 
 app = Flask(__name__)
+TIMER_SECONDS = 30
 DATABASE = 'user_data.db'
 CORS(app, resources={r"/*": {"origins": "http://127.0.0.1:5000"}})
 blackJackRoomList = [
@@ -12,15 +15,15 @@ blackJackRoomList = [
         'capacity': 4,
         'current_players': 0,
         'description': '這是房間1的描述',
-        'players': [
-            # 範例玩家資料
-            # {'username': 'player1', 'seat': 1, 'bet': 0, 'hand': [], 'points': 0, 'last_action_time': None}
-        ],
-        'dealer': {'hand': [], 'points': 0},  # 莊家的手牌與點數
-        'current_turn': None,  # 當前輪到的玩家
-        'turn_start_time': None  # 當前玩家開始計時的時間
+        'players': [],
+        'dealer': {'hand': [], 'points': 0},
+        'current_turn': None,
+        'turn_start_time': None,
+        'timer': None,  # 房間的倒數計時器
+        'timer_remaining': TIMER_SECONDS,  # 倒數剩餘時間
+        'game_running': False  # 遊戲狀態
     },
-    # 其他房間資料結構類似
+    # 可添加更多房間
 ]
 # 初始化資料庫並創建表
 def init_db():
@@ -183,80 +186,138 @@ def create_room():
     global blackJackRoomList
     data = request.json
 
-    # 創建新的房間資料
-    blackJackRoomID = len(blackJackRoomList) + 1
-    blackJackRoom = {
-        'id': blackJackRoomID,
-        'name': data.get('name', f'房間 {blackJackRoomID}'),
-        'description': data.get('description', '這是一個新的房間'),
-        'capacity': data.get('max_players', 4),  # 預設最大人數為4
-        'current_players': 0  # 新房間初始人數為0
+    # 確保數據有效性
+    room_name = data.get('name', f'房間 {len(blackJackRoomList) + 1}')
+    description = data.get('description', '這是一個新的房間')
+    max_players = int(data.get('capacity', 4))
+    print(data)
+    # 檢查最大玩家數是否合理
+    if not isinstance(max_players, int) or max_players <= 0:
+        return jsonify({'error': '最大玩家數必須為正整數'}), 400
+
+    # 創建新的房間數據結構
+    new_room = {
+        'id': len(blackJackRoomList) + 1,  # 動態生成房間 ID
+        'name': room_name,
+        'capacity': max_players,
+        'current_players': 0,
+        'description': description,
+        'players': [],  # 初始化玩家列表
+        'dealer': {'hand': [], 'points': 0},  # 初始化莊家的數據
+        'current_turn': None,
+        'turn_start_time': None,
+        'timer': None,  # 倒數計時器
+        'timer_remaining': TIMER_SECONDS,  # 倒數時間
+        'game_running': False  # 初始遊戲狀態
     }
+
     # 將房間添加到列表
-    blackJackRoomList.append(blackJackRoom)
-    return jsonify({'message': '房間創建成功', 'blackJackRoom': blackJackRoom}), 201
+    blackJackRoomList.append(new_room)
+    return jsonify({'message': '房間創建成功', 'blackJackRoom': new_room}), 201
+
+# 開始遊戲
+def start_game(room):
+    """開始房間遊戲"""
+    room['game_running'] = True
+    print(f"房間 {room['name']} 開始遊戲！")
+
+def reset_game(room):
+    room['timer_remaining'] = TIMER_SECONDS
+
+# 倒數計時邏輯
+def countdown_timer(room):
+    """倒數計時器"""
+    while room['timer_remaining'] > 0:
+        time.sleep(1)
+        room['timer_remaining'] -= 1
+        print(f"房間 {room['name']} 倒數中：{room['timer_remaining']} 秒")
+        
+        # 如果房間沒人則停止計時
+        if room['current_players'] == 0:
+            room['timer_remaining'] = TIMER_SECONDS  # 重置倒數時間
+            print(f"房間 {room['name']} 無玩家，重置計時器")
+            return
+
+    # 倒數結束，開始遊戲
+    if room['current_players'] > 0:
+        start_game(room)
 
 @app.route('/blackjackRoom/<int:blackJackRoomID>/player/<int:seat>/action', methods=['POST'])
 def blackjackRoom_player_action(blackJackRoomID, seat):
-    """
-    處理玩家對座位的操作，包括入座、離座和下注。
-    """
+    """處理玩家的座位操作，包括入座與離座"""
     data = request.get_json()
     player_name = data.get('playerName')
     action = data.get('action')
-    amount = data.get('amount', 0)  # 預設下注金額為 0
 
-    # 找到房間
-    blackJackRoom = next((room for room in blackJackRoomList if room['id'] == blackJackRoomID), None)
-    if not blackJackRoom:
+    # 找到對應的房間
+    room = next((r for r in blackJackRoomList if r['id'] == blackJackRoomID), None)
+    if not room:
         return jsonify({'error': '房間不存在'}), 404
 
-    # 處理不同操作
     if action == 'sit':
-        # 確認座位是否被占用
-        if any(player['seat'] == seat for player in blackJackRoom['players']):
+        # 確認座位是否被佔用
+        if any(player['seat'] == seat for player in room['players']):
             return jsonify({'error': '座位已被佔用'}), 400
 
-        # 確認玩家是否已經選擇其他座位
-        if any(player['username'] == player_name for player in blackJackRoom['players']):
-            return jsonify({'error': '玩家已在其他座位上'}), 400
+        # 確認玩家是否已經在其他座位
+        if any(player['username'] == player_name for player in room['players']):
+            return jsonify({'error': '玩家已經入座'}), 400
 
-        # 記錄玩家座位
-        blackJackRoom['players'].append({'username': player_name, 'seat': seat, 'bet': 0})
-        blackJackRoom['current_players'] += 1
+        # 添加玩家
+        room['players'].append({'username': player_name, 'seat': seat, 'bet': 0})
+        room['current_players'] += 1
+
+        # 如果這是第一位玩家，啟動倒數計時
+        if room['current_players'] == 1 and not room['game_running']:
+            room['timer_start_time'] = time.time()  # 記錄倒數開始的時間戳
 
     elif action == 'leave':
-        # 移除玩家的座位記錄
-        blackJackRoom['players'] = [player for player in blackJackRoom['players'] if player['username'] != player_name]
-        blackJackRoom['current_players'] -= 1
+        # 移除玩家
+        room['players'] = [player for player in room['players'] if player['username'] != player_name]
+        room['current_players'] -= 1
 
-    elif action == 'bet':
-        # 設定玩家的下注金額
-        for player in blackJackRoom['players']:
-            if player['username'] == player_name:
-                player['bet'] = amount
-                break
-        else:
-            return jsonify({'error': '玩家尚未入座'}), 400
+        # 如果所有玩家都離開，重置計時器和遊戲狀態
+        if room['current_players'] == 0:
+            room['timer_start_time'] = None  # 清除計時器
+            room['game_running'] = False
+
     else:
         return jsonify({'error': '未知操作'}), 400
 
-    # 返回當前房間的座位占用狀態
-    occupied_buttons = {player['seat']: player['username'] for player in blackJackRoom['players']}
+    # 返回房間狀態
+    occupied_buttons = {player['seat']: player['username'] for player in room['players']}
     return jsonify({'message': f'{action} 動作已完成', 'occupiedButtons': occupied_buttons}), 200
+
+
+
+def calculate_timer_remaining(room):
+    """計算房間的倒數剩餘時間"""
+    if not room.get('timer_start_time'):  # 無倒數計時
+        return TIMER_SECONDS
+    elapsed_time = time.time() - room['timer_start_time']
+    remaining_time = max(0, TIMER_SECONDS - int(elapsed_time))  # 確保不為負數
+    return remaining_time
 
 
 @app.route('/blackjackRoom/<int:blackJackRoomID>/get', methods=['GET'])
 def get_blackjack_room_state(blackJackRoomID):
-    """
-    獲取房間狀態，包括座位占用資訊。
-    """
-    blackJackRoom = next((room for room in blackJackRoomList if room['id'] == blackJackRoomID), None)
-    if not blackJackRoom:
+    """獲取房間狀態，包括動態計算倒數剩餘時間"""
+    room = next((r for r in blackJackRoomList if r['id'] == blackJackRoomID), None)
+    if not room:
         return jsonify({'error': '房間不存在'}), 404
+    print(room)
+    # 計算剩餘時間
+    timer_remaining = calculate_timer_remaining(room)
 
-    occupied_buttons = {player['seat']: player['username'] for player in blackJackRoom['players']}
-    return jsonify({'blackJackRoom': blackJackRoom, 'occupiedButtons': occupied_buttons})
+    occupied_buttons = {player['seat']: player['username'] for player in room['players']}
+    return jsonify({
+        'blackJackRoom': {
+            key: value for key, value in room.items() if key != 'timer_start_time'  # 過濾不必要的屬性
+        },
+        'occupiedButtons': occupied_buttons,
+        'timer_remaining': timer_remaining,
+        'game_running': room['game_running']
+    }), 200
 
 
 

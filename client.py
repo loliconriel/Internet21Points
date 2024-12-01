@@ -1,11 +1,22 @@
 import requests
 import secrets
 import threading
+from functools import wraps
 from flask import Flask, render_template, session, redirect, url_for, request, flash,jsonify
 
 app = Flask(__name__)
 app.secret_key = secrets.token_hex(32)
 API_URL = 'http://127.0.0.1:5001'
+
+def login_required(f):
+    """檢查用戶是否已登入"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'username' not in session:
+            flash("請先登入才能使用該功能", "warning")
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
 
 
 @app.route('/')

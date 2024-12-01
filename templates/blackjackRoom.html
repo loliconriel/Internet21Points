@@ -5,15 +5,25 @@
 {% block content %}
 <div class="container-fluid" style="background-image: url('../static/image/blackjackBackground.jpg'); background-size: cover; background-position: center; padding-top: 50px; height: 100%;">
     <!-- 房間信息 -->
-    <div class="container text-center">
-        <h5 id="room-info" class="text-white">
-            房間: {{ blackJackRoom.name }} 描述: {{ blackJackRoom.description }} 人數上限: {{ blackJackRoom.capacity }} 當前玩家: {{ blackJackRoom.current_players }}
-        </h5>
+    <div class="container text-center text-white">
+        <h3 id="room-name">房間名稱: {{ blackJackRoom.name }}</h3>
+        <p id="room-description">描述: {{ blackJackRoom.description }}</p>
+        <p id="room-capacity">人數: {{ blackJackRoom.current_players }}/{{ blackJackRoom.capacity }}</p>
     </div>
 
-    <!-- 玩家座位按鈕 -->
+    <!-- 倒數計時 -->
+    <div class="container text-center mt-4">
+        <h5 id="timer-info" class="text-warning">倒數計時: <span id="timer">{{ blackJackRoom.timer_remaining }}</span> 秒</h5>
+    </div>
+
+    <!-- 玩家座位 -->
     <div id="player-buttons" class="container text-center mt-4">
         <!-- 按鈕將由 JavaScript 動態生成 -->
+    </div>
+
+    <!-- 顯示離座按鈕 -->
+    <div id="leave-seat-btn-container" class="container text-center mt-4">
+        <!-- 離座按鈕將由 JavaScript 動態生成 -->
     </div>
 </div>
 
@@ -22,6 +32,7 @@
     const blackJackRoomID = "{{ blackJackRoom.id }}";
     const currentUser = "{{ session['username'] }}";
 
+    // 動態生成按鈕
     function createButtons(occupiedButtons) {
         const container = $('#player-buttons');
         container.empty();
@@ -29,17 +40,35 @@
         for (let i = 1; i <= "{{ blackJackRoom.capacity }}"; i++) {
             const playerName = occupiedButtons[i] || null;
 
-            const button = $('<button>')
+            const button = $('<button>')  // 座位按鈕
                 .attr('id', `button-${i}`)
                 .addClass('btn m-2')
                 .addClass(playerName ? 'btn-secondary' : 'btn-primary')
                 .text(playerName || `位置 ${i}`)
-                .prop('disabled', !!playerName);
+                .prop('disabled', !!playerName);  // 如果座位已被占用，禁用按鈕
 
-            if (!playerName) {
+            // 如果是當前玩家，並且已經入座，顯示離座按鈕
+            if (playerName === currentUser) {
+                button.on('click', function () {
+                    $.ajax({
+                        url: `/blackjackRoom/${blackJackRoomID}/player/${i}/action`,
+                        method: 'POST',
+                        contentType: 'application/json',
+                        data: JSON.stringify({ playerName: currentUser, action: 'leave' }),
+                        success: function (response) {
+                            alert('成功離座！');
+                            updateRoomState();
+                        },
+                        error: function (xhr) {
+                            alert(xhr.responseJSON.error || '操作失敗');
+                        }
+                    });
+                });
+                //button.text('離座');  // 已入座的玩家顯示"離座"按鈕
+            } else if (!playerName) {  // 如果座位未被佔用
                 button.on('click', function () {
                     if (!currentUser) {
-                        alert("請先登入！");
+                        alert("請先登入才能執行此操作！");
                         return;
                     }
 
@@ -50,7 +79,7 @@
                         data: JSON.stringify({ playerName: currentUser, action: 'sit' }),
                         success: function (response) {
                             alert('成功入座！');
-                            updateButtons();
+                            updateRoomState();
                         },
                         error: function (xhr) {
                             alert(xhr.responseJSON.error || '操作失敗');
@@ -63,18 +92,60 @@
         }
     }
 
-    function updateButtons() {
+    // 更新房間狀態
+    function updateRoomState() {
         $.get(`/blackjackRoom/${blackJackRoomID}/get`, function (data) {
-            const occupiedButtons = data.occupiedButtons || {};
+            const timer = data.timer_remaining;
+            const occupiedButtons = data.occupiedButtons;
+            $('#room-capacity').text("人數: " + data.blackJackRoom.current_players + "/" + data.blackJackRoom.capacity);
+            $('#timer').text(timer);
             createButtons(occupiedButtons);
+
+            // 顯示離座按鈕
+            showLeaveSeatButton(data.occupiedButtons);
         }).fail(function () {
-            alert('無法更新座位資訊');
+            alert('無法更新房間資訊');
         });
     }
 
+    // 根據玩家是否入座動態顯示離座按鈕
+    function showLeaveSeatButton(occupiedButtons) {
+        const leaveSeatBtnContainer = $('#leave-seat-btn-container');
+        leaveSeatBtnContainer.empty();  // 每次更新時清空容器
+
+        const playerSeat = Object.keys(occupiedButtons).find(seat => occupiedButtons[seat] === currentUser);
+
+        if (playerSeat) {
+            // 如果玩家已經入座，顯示離座按鈕
+            const leaveButton = $('<button>')
+                .addClass('btn btn-danger')
+                .text('離座')
+                .on('click', function () {
+                    // 觸發離座操作
+                    $.ajax({
+                        url: `/blackjackRoom/${blackJackRoomID}/player/${playerSeat}/action`,
+                        method: 'POST',
+                        contentType: 'application/json',
+                        data: JSON.stringify({ playerName: currentUser, action: 'leave' }),
+                        success: function(response) {
+                            alert('成功離座！');
+                            updateRoomState();  // 更新房間狀態
+                            leaveSeatBtnContainer.empty();  // 隱藏離座按鈕
+                        },
+                        error: function(xhr) {
+                            alert(xhr.responseJSON.error || '操作失敗');
+                        }
+                    });
+                });
+
+            leaveSeatBtnContainer.html(leaveButton);  // 顯示離座按鈕
+        }
+    }
+
+    // 初始化房間狀態更新
     $(document).ready(function () {
-        updateButtons();
-        setInterval(updateButtons, 5000);
+        updateRoomState();
+        setInterval(updateRoomState, 1000); // 每秒更新一次
     });
 </script>
 {% endblock %}
