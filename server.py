@@ -2,6 +2,7 @@ import sqlite3
 import time
 import threading
 import requests
+import random
 from flask import Flask, request, jsonify,render_template
 from flask_cors import CORS
 
@@ -41,13 +42,29 @@ def init_db():
         ''')
         conn.commit()
 def filter_room_data(room):
-    """過濾掉不必要的屬性"""
-    return {key: value for key, value in room.items() if key != 'timer'}
+    """過濾掉不必要的屬性，包括 deck"""
+    return {key: value for key, value in room.items() if key not in ['deck', 'timer']}
 def reset_game(room):
     """重置遊戲狀態"""
+    room['timer_start_time'] = time.time()
     room['timer_remaining'] = TIMER_SECONDS
-    room['timer_running'] = False
+    room['timer_running'] = True
     room['game_running'] = False
+    room['current_turn'] = None
+    room['turn_start_time'] = None
+    room['deck'] = None
+
+    # 重置莊家數據
+    room['dealer'] = {'hand': [], 'points': 0}
+
+    # 重置玩家數據，但保留座位和賭注
+    for player in room['players']:
+        player['hand'] = []  # 清空手牌
+        player['points'] = 0  # 重置點數
+        player['stand'] = False  # 重置為未停牌
+        player['timeout'] = False  # 重置超時狀態
+        player['bet'] = 0
+
 def get_user_money(username):
     """根據使用者名稱取得該使用者的金額"""
     try:
@@ -181,6 +198,24 @@ def get_money():
                 return jsonify({'error': '用戶不存在'}), 404
     except sqlite3.Error as e:
         return jsonify({'error': f'資料庫錯誤: {str(e)}'}), 500
+def update_player_balances(results, players):
+    """根據遊戲結果更新玩家的金額"""
+    with sqlite3.connect(DATABASE) as conn:
+        cursor = conn.cursor()
+        for player in players:
+            result = results[player['username']]
+            money = get_user_money(player['username'])
+            bet = player['bet']
+            if result == "贏了！":
+                new_balance = int(money) + bet
+            elif result == "平手！":
+                new_balance = int(money)
+            else:
+                new_balance = int(money) - bet
+            print(new_balance)
+            cursor.execute("UPDATE User SET money = ? WHERE username = ?", (str(new_balance), player['username']))
+        conn.commit()
+
 @app.route('/blackjackLobby', methods=['GET'])
 def blackjackLobby():
     """返回房間列表，過濾 timer"""
@@ -229,52 +264,127 @@ def create_room():
     blackJackRoomList.append(new_room)
     return jsonify({'message': '房間創建成功', 'blackJackRoom': new_room}), 201
 
+def shuffle_deck():
+    """產生一副撲克牌並洗牌"""
+    suits = 'CDHS'  # 黑桃、紅心、梅花、方塊
+    ranks = [str(i) for i in range(1, 14)]  # A ~ K
+    deck = [rank + suit for rank in ranks for suit in suits] * 6  # 6 副牌
+    random.shuffle(deck)
+    return deck
+def calculate_score(cards):
+    """計算 21 點手牌分數"""
+    score = 0
+    aces = 0
+    for card in cards:
+        rank = card[:-1]  # 排除花色，僅取數值部分
+        if rank in ['11', '12', '13']:  # J, Q, K
+            score += 10
+        elif rank == '1':  # Ace
+            score += 1
+            aces += 1
+        else:
+            score += int(rank)
+
+    # 考慮 Ace 作為 11 的情況
+    while aces > 0 and score + 10 <= 21:
+        score += 10
+        aces -= 1
+    return score
+def determine_results(players, dealer_hand):
+    """判斷玩家與莊家的遊戲結果"""
+    dealer_score = calculate_score(dealer_hand)
+    results = {}
+    for player in players:
+        player_score = player['points']
+        if player_score > 21:
+            results[player['username']] = "爆牌，輸了！"
+        elif dealer_score > 21 or player_score > dealer_score:
+            results[player['username']] = "贏了！"
+        elif player_score < dealer_score:
+            results[player['username']] = "輸了！"
+        else:
+            results[player['username']] = "平手！"
+    return results
+
+
 def start_game(room):
-    """開始房間遊戲"""
+    """開始 21 點遊戲並按座位順序處理決策"""
     with sqlite3.connect(DATABASE) as conn:
         cursor = conn.cursor()
+
+        # 初始化牌堆
+        room['deck'] = shuffle_deck()
+
+        # 清空莊家手牌
+        room['dealer']['hand'] = []
+        room['dealer']['points'] = 0
+
+        # 清空玩家初始狀態
         for player in room['players']:
-            cursor.execute("SELECT money FROM User WHERE username = ?", (player['username'],))
-            result = cursor.fetchone()
+            player['hand'] = [room['deck'].pop(), room['deck'].pop()]  # 發兩張牌
+            player['points'] = calculate_score(player['hand'])
+            player['stand'] = False  # 初始化未停牌狀態
+            player['timeout'] = False  # 是否超時自動停牌
 
-            if not result:
-                print(f"玩家 {player['username']} 不存在於資料庫中")
-                continue
+        # 給莊家發牌
+        room['dealer']['hand'] = [room['deck'].pop(), room['deck'].pop()]
+        room['dealer']['points'] = calculate_score(room['dealer']['hand'])
 
-            player_money = int(result[0])  # 金額為整數處理
-            bet = player['bet']
+        # 遊戲決策邏輯
+        room['game_running'] = True
+        while any(not player['stand'] and player['points'] <= 21 for player in room['players']):
+            for player in room['players']:
+                # 跳過已經停牌或爆牌的玩家
+                if player['stand'] or player['points'] > 21:
+                    continue
 
-            if bet > player_money:
-                print(f"玩家 {player['username']} 金額不足，無法參與遊戲")
-                room['players'] = [p for p in room['players'] if p['username'] != player['username']]
-                room['current_players'] -= 1
-            else:
-                # 扣除金額並更新資料庫
-                new_balance = player_money - bet
-                cursor.execute("UPDATE User SET money = ? WHERE username = ?", (str(new_balance), player['username']))
-                conn.commit()
-                print(f"玩家 {player['username']} 扣除 {bet}，剩餘金額：{new_balance}")
+                # 設置當前回合的玩家
+                room['current_turn'] = player['username']
+                room['turn_start_time'] = time.time()
 
-    room['game_running'] = True
-    print(f"房間 {room['name']} 遊戲已開始！")
+                # 等待玩家行動
+                action_done = False
+                while time.time() - room['turn_start_time'] < 10:  # 等待 10 秒
+                    if player['stand'] or player['points'] > 21:
+                        action_done = True
+                        break
+                    time.sleep(1)  # 每秒檢查一次
 
+                # 超時自動停牌
+                if not action_done:
+                    print(f"玩家 {player['username']} 超時，執行自動停牌")
+                    player['stand'] = True
+                    player['timeout'] = True
 
+        # 莊家邏輯
+        while room['dealer']['points'] < 17:
+            card = room['deck'].pop()
+            room['dealer']['hand'].append(card)
+            room['dealer']['points'] = calculate_score(room['dealer']['hand'])
 
-def reset_game(room):
-    room['timer_remaining'] = TIMER_SECONDS
+        # 結算
+        results = determine_results(room['players'], room['dealer']['hand'])
+        update_player_balances(results, room['players'])
+        time.sleep(10)
+        # 重置遊戲狀態
+        room['game_running'] = False
+        print("遊戲結束，結果已結算。")
+        reset_game(room)
+
 
 def countdown_timer(room):
     """倒數計時"""
-    room['timer_running'] = True
-    while room['timer_remaining'] > 0:
-        time.sleep(1)
-        room['timer_remaining'] -= 1
-        if room['current_players'] == 0:
-            reset_game(room)
-            return
-    if room['current_players'] > 0:
-        start_game(room)
-    room['timer_running'] = False
+    while True:
+        room['timer_running'] = True
+        while room['timer_remaining'] > 0:
+            time.sleep(1)
+            room['timer_remaining'] -= 1
+            if room['current_players'] == 0:
+                reset_game(room)
+                return
+        if room['current_players'] > 0:
+            start_game(room)
+        room['timer_running'] = False
     
 @app.route('/blackjackRoom/<int:blackJackRoomID>/player/<int:seat>/action', methods=['POST'])
 def blackjackRoom_player_action(blackJackRoomID, seat):
@@ -315,9 +425,7 @@ def blackjackRoom_player_action(blackJackRoomID, seat):
 
         # 如果所有玩家都離開，重置計時器和遊戲狀態
         if room['current_players'] == 0:
-            room['timer_start_time'] = None  # 清除計時器
-            room['game_running'] = False
-            room['bet_timing'] = True
+            reset_game(room)
     elif action == 'bet':
         timer_remaining = calculate_timer_remaining(room)
         if timer_remaining <= 0:
@@ -329,9 +437,41 @@ def blackjackRoom_player_action(blackJackRoomID, seat):
         
         # 更新玩家投注金額
         if isinstance(bet, int) and bet > 0:
-            player['bet'] += bet
+            player['bet'] = bet
         else:
             return jsonify({'error': '投注金額必須為正整數'}), 400
+    elif action == 'hit':
+        # 找到玩家並處理加牌
+        player = next((player for player in room['players'] if player['username'] == player_name), None)
+        if not player:
+            return jsonify({'error': '玩家未入座'}), 400
+        
+        # 發一張牌
+        if 'deck' not in room:
+            room['deck'] = shuffle_deck()
+        card = room['deck'].pop()
+        player['hand'].append(card)
+        player['points'] = calculate_score(player['hand'])
+
+        # 檢查爆牌
+        if player['points'] > 21:
+            room['turn_start_time'] = 0
+            return jsonify({'message': '爆牌，回合結束', 'player': player}), 200
+            
+        else:
+            room['turn_start_time'] = time.time()
+        return jsonify({'message': '加牌成功', 'player': player}), 200
+
+    elif action == 'stand':
+        
+        # 停牌邏輯，設定玩家完成本回合
+        player = next((player for player in room['players'] if player['username'] == player_name), None)
+        if not player:
+            return jsonify({'error': '玩家未入座'}), 400
+        
+        player['stand'] = True
+        room['turn_start_time'] = 0
+        return jsonify({'message': '停牌成功', 'player': player}), 200
     else:
         return jsonify({'error': '未知操作'}), 400
 
@@ -362,6 +502,13 @@ def get_blackjack_room_state(blackJackRoomID):
     occupied_buttons = {player['seat']: player['username'] for player in room['players']}
     players_bet = {player['seat']: player['bet'] for player in room['players']}  # 玩家賭注
     user_balance = 0
+
+    # 計算當前決策玩家的剩餘時間
+    decision_time_remaining = None
+    if room['current_turn'] and room['turn_start_time']:
+        elapsed_time = time.time() - room['turn_start_time']
+        decision_time_remaining = max(0, TIMER_SECONDS - int(elapsed_time))
+
     if username:
         user_balance = get_user_money(username)
     return jsonify({
@@ -370,7 +517,10 @@ def get_blackjack_room_state(blackJackRoomID):
         'playersBet': players_bet,  # 返回賭注資訊
         'timer_remaining': calculate_timer_remaining(room),
         'game_running': room['game_running'],
-        'user_balance': user_balance
+        'user_balance': user_balance,
+        'dealer': room['dealer'],  # 返回莊家的手牌與點數
+        'current_turn': room['current_turn'],  # 當前決策玩家
+        'decision_time_remaining': decision_time_remaining,  # 剩餘時間
     }), 200
 
 

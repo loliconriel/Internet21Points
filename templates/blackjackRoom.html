@@ -28,7 +28,30 @@
         <input type="number" id="bet-amount" class="form-control" placeholder="輸入金額" min="1">
         <button id="place-bet-btn" class="btn btn-success mt-2">下注</button>
     </div>
-</div>
+    <div class="container text-center mt-4">
+        <h5 id="decision-info" class="text-info">
+            <span id="current-turn-player">--</span> 的剩餘時間: 
+            <span id="decision-time">--</span> 秒
+        </h5>
+    </div>
+    <div id="dealer-hand-container" class="container mt-4 text-white">
+        <h5 class="text-center">莊家手牌</h5>
+        <div id="dealer-hand" class="d-flex flex-wrap justify-content-center"></div>
+        <p id="dealer-points" class="text-center"></p>
+    </div>
+
+    <div id="player-actions-container" class="container mt-4 text-center" style="display: none;">
+        <button id="hit-btn" class="btn btn-primary">加牌 (Hit)</button>
+        <button id="stand-btn" class="btn btn-warning">停牌 (Stand)</button>
+    </div>
+    
+    <!-- 新增手牌顯示區塊 -->
+    <div id="player-hands-container" class="container mt-4 text-white">
+        <h5 class="text-center">玩家手牌</h5>
+        <div id="player-hands" class="d-flex flex-wrap justify-content-center"></div>
+    </div>
+
+    </div>
 
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script>
@@ -104,29 +127,95 @@
             }
         });
     }
+    
     // 更新房間狀態
     function updateRoomState() {
         $.get(`/blackjackRoom/${blackJackRoomID}/get`, function (data) {
-            const { timer_remaining, occupiedButtons, blackJackRoom, user_balance } = data;
+            const { dealer,timer_remaining, occupiedButtons, blackJackRoom, user_balance, blackJackRoom: { players },decision_time_remaining,current_turn } = data;
+
             $roomCapacity.text(`人數: ${blackJackRoom.current_players}/${blackJackRoom.capacity}`);
             $timer.text(timer_remaining);
             createButtons(occupiedButtons);
-            
+            togglePlayerActions(occupiedButtons);
             playerSeatNumber = Object.keys(occupiedButtons).find(seat => occupiedButtons[seat] === currentUser) || null;
+
+            const $decisionInfo = $('#decision-info');
+            if (current_turn && decision_time_remaining !== null) {
+                $('#current-turn-player').text(current_turn);
+                $('#decision-time').text(decision_time_remaining);
+                $decisionInfo.show(); // 顯示決策資訊
+            } else {
+                $('#current-turn-player').text('--');
+                $('#decision-time').text('--');
+                $decisionInfo.hide(); // 隱藏決策資訊
+            }
 
             showLeaveSeatButton(occupiedButtons);
             if (timer_remaining > 0) {
                 toggleBetContainer(occupiedButtons); // 顯示下注區塊
-                console.log(user_balance)
                 $('#bet-amount').attr('max', user_balance);
             } else {
                 $betContainer.hide(); // 隱藏下注區塊
             }
+            displayDealerCards(dealer);
+            // 更新手牌顯示到新區塊
+            displayPlayerCards(players);
         }).fail(function () {
             alert('無法更新房間資訊');
         });
     }
 
+    // 顯示玩家動作按鈕
+    function togglePlayerActions(occupiedButtons) {
+        const playerSeat = Object.keys(occupiedButtons).find(seat => occupiedButtons[seat] === currentUser);
+        if (playerSeat) {
+            $('#player-actions-container').show(); // 顯示加牌與停牌按鈕
+        } else {
+            $('#player-actions-container').hide(); // 隱藏按鈕
+        }
+    }
+    
+    $('#hit-btn').on('click', function() {
+        if (!playerSeatNumber) {
+            alert('尚未入座！');
+            return;
+        }
+
+        $.ajax({
+            url: `/blackjackRoom/${blackJackRoomID}/player/${playerSeatNumber}/action`,
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ playerName: currentUser, action: 'hit' }),
+            success: function(response) {
+                alert(response.message);
+                updateRoomState(); // 更新房間狀態
+            },
+            error: function(xhr) {
+                alert(xhr.responseJSON.error || '加牌失敗');
+            }
+        });
+    });
+
+    $('#stand-btn').on('click', function() {
+        if (!playerSeatNumber) {
+            alert('尚未入座！');
+            return;
+        }
+
+        $.ajax({
+            url: `/blackjackRoom/${blackJackRoomID}/player/${playerSeatNumber}/action`,
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ playerName: currentUser, action: 'stand' }),
+            success: function(response) {
+                alert(response.message);
+                updateRoomState(); // 更新房間狀態
+            },
+            error: function(xhr) {
+                alert(xhr.responseJSON.error || '停牌失敗');
+            }
+        });
+    });
     // 顯示離座按鈕
     function showLeaveSeatButton(occupiedButtons) {
         $leaveSeatBtnContainer.empty();
@@ -191,8 +280,59 @@
         }
     });
 });
+    function displayPlayerCards(players) {
+        const $playerHands = $('#player-hands'); // 新手牌容器
+        $playerHands.empty(); // 清空之前的手牌顯示
 
+        players.forEach(player => {
+            const container = $('<div>')
+                .addClass('player-hand-container text-center text-white m-3 p-2 border rounded')
+                .css({ width: '200px', backgroundColor: 'rgba(0, 0, 0, 0.6)' });
 
+            // 顯示玩家名稱
+            const playerName = $('<p>').text(player.username || '未知玩家').addClass('fw-bold');
+
+            // 顯示牌
+            const cardImages = $('<div>').addClass('d-flex justify-content-center flex-wrap');
+            (player.hand || []).forEach(card => {
+                const imagePath = `/static/cards/${card}.png`; // 根據牌數據生成圖片路徑
+                const cardImage = $('<img>')
+                    .attr('src', imagePath)
+                    .addClass('m-1')
+                    .css({ width: '50px', height: '75px' }); // 控制圖片大小
+                cardImages.append(cardImage);
+            });
+
+            // 顯示點數
+            const points = $('<p>').text(`點數: ${player.points || 0}`);
+            
+            //顯示下注金額
+            const betAmount = $('<p>')
+            .text(`下注: ${player.bet || 0}`)
+            .addClass('text-warning');
+
+            // 將玩家名稱、手牌圖片和點數加入到容器
+            container.append(playerName, cardImages, points,betAmount);
+            $playerHands.append(container);
+        });
+    }
+
+    function displayDealerCards(dealer) {
+        const $dealerHand = $('#dealer-hand');
+        const $dealerPoints = $('#dealer-points');
+        $dealerHand.empty(); // 清空手牌顯示
+
+        (dealer.hand || []).forEach(card => {
+            const imagePath = `/static/cards/${card}.png`; // 根據牌數據生成圖片路徑
+            const cardImage = $('<img>')
+                .attr('src', imagePath)
+                .addClass('m-1')
+                .css({ width: '50px', height: '75px' }); // 控制圖片大小
+            $dealerHand.append(cardImage);
+        });
+
+        $dealerPoints.text(`點數: ${dealer.points || 0}`);
+    }
     // 初始化房間狀態更新
     $(document).ready(function () {
         updateRoomState();

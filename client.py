@@ -38,7 +38,7 @@ def register():
         response = requests.post(f'{API_URL}/register', json={'username': username, 'password': password})
 
         if response.status_code == 201:
-            flash('註冊成功！', 'success')
+            #flash('註冊成功！', 'success')
             # 註冊成功後跳轉回首頁
             return redirect(url_for('home'))
         else:

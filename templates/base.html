@@ -78,5 +78,9 @@
             console.error('請求失敗', error);
         }
     }
+    $(document).ready(function () {
+        loadMoney();
+        setInterval(loadMoney, 5000); // 每5秒更新一次
+    });
 </script>
 </html>
