@@ -4,7 +4,7 @@
 
 {% block content %}
 <div class="container-fluid" style="background-image: url('../static/image/blackjackBackground.jpg'); background-size: cover; background-position: center; padding-top: 50px; height: 100%;">
-    <!-- 房間信息 -->
+    <!-- 房間資訊 -->
     <div class="container text-center text-white">
         <h3 id="room-name">房間名稱: {{ blackJackRoom.name }}</h3>
         <p id="room-description">描述: {{ blackJackRoom.description }}</p>
@@ -17,13 +17,16 @@
     </div>
 
     <!-- 玩家座位 -->
-    <div id="player-buttons" class="container text-center mt-4">
-        <!-- 按鈕將由 JavaScript 動態生成 -->
-    </div>
+    <div id="player-buttons" class="container text-center mt-4"></div>
 
     <!-- 顯示離座按鈕 -->
-    <div id="leave-seat-btn-container" class="container text-center mt-4">
-        <!-- 離座按鈕將由 JavaScript 動態生成 -->
+    <div id="leave-seat-btn-container" class="container text-center mt-4"></div>
+
+    <!-- 下注金額輸入框 -->
+    <div id="bet-container" class="container text-center mt-4" style="display: none;">
+        <label for="bet-amount" class="text-white">請輸入下注金額:</label>
+        <input type="number" id="bet-amount" class="form-control" placeholder="輸入金額" min="1">
+        <button id="place-bet-btn" class="btn btn-success mt-2">下注</button>
     </div>
 </div>
 
@@ -31,116 +34,164 @@
 <script>
     const blackJackRoomID = "{{ blackJackRoom.id }}";
     const currentUser = "{{ session['username'] }}";
-
-    // 動態生成按鈕
+    const $playerButtons = $('#player-buttons');
+    const $leaveSeatBtnContainer = $('#leave-seat-btn-container');
+    const $roomCapacity = $('#room-capacity');
+    const $timer = $('#timer');
+    const $betContainer = $('#bet-container');
+    let playerSeatNumber = null;
+    // 動態生成玩家座位按鈕
     function createButtons(occupiedButtons) {
-        const container = $('#player-buttons');
-        container.empty();
+        $playerButtons.empty();
 
         for (let i = 1; i <= "{{ blackJackRoom.capacity }}"; i++) {
             const playerName = occupiedButtons[i] || null;
-
-            const button = $('<button>')  // 座位按鈕
+            const button = $('<button>')
                 .attr('id', `button-${i}`)
                 .addClass('btn m-2')
                 .addClass(playerName ? 'btn-secondary' : 'btn-primary')
                 .text(playerName || `位置 ${i}`)
-                .prop('disabled', !!playerName);  // 如果座位已被占用，禁用按鈕
+                .prop('disabled', !!playerName);
 
-            // 如果是當前玩家，並且已經入座，顯示離座按鈕
+            // 當前玩家入座/離座按鈕邏輯
             if (playerName === currentUser) {
-                button.on('click', function () {
-                    $.ajax({
-                        url: `/blackjackRoom/${blackJackRoomID}/player/${i}/action`,
-                        method: 'POST',
-                        contentType: 'application/json',
-                        data: JSON.stringify({ playerName: currentUser, action: 'leave' }),
-                        success: function (response) {
-                            alert('成功離座！');
-                            updateRoomState();
-                        },
-                        error: function (xhr) {
-                            alert(xhr.responseJSON.error || '操作失敗');
-                        }
-                    });
-                });
-                //button.text('離座');  // 已入座的玩家顯示"離座"按鈕
-            } else if (!playerName) {  // 如果座位未被佔用
-                button.on('click', function () {
-                    if (!currentUser) {
-                        alert("請先登入才能執行此操作！");
-                        return;
-                    }
-
-                    $.ajax({
-                        url: `/blackjackRoom/${blackJackRoomID}/player/${i}/action`,
-                        method: 'POST',
-                        contentType: 'application/json',
-                        data: JSON.stringify({ playerName: currentUser, action: 'sit' }),
-                        success: function (response) {
-                            alert('成功入座！');
-                            updateRoomState();
-                        },
-                        error: function (xhr) {
-                            alert(xhr.responseJSON.error || '操作失敗');
-                        }
-                    });
-                });
+                button.on('click', () => handleSeatAction(i, 'leave'));
+            } else if (!playerName) {
+                button.on('click', () => handleSeatAction(i, 'sit'));
             }
 
-            container.append(button);
+            $playerButtons.append(button);
         }
     }
 
+    // 處理座位入座/離座操作
+    function handleSeatAction(seatNumber, action) {
+        if (!currentUser && action === 'sit') {
+            alert("請先登入才能執行此操作！");
+            return;
+        }
+
+        $.ajax({
+            url: `/blackjackRoom/${blackJackRoomID}/player/${seatNumber}/action`,
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ playerName: currentUser, action: action }),
+            success: function () {
+                alert(action === 'sit' ? '成功入座！' : '成功離座！');
+                updateRoomState();
+            },
+            error: function (xhr) {
+                alert(xhr.responseJSON.error || '操作失敗');
+            }
+        });
+    }
+    function handleBetAction(seatNumber, action) {
+        if (!currentUser && action === 'sit') {
+            alert("請先登入才能執行此操作！");
+            return;
+        }
+
+        $.ajax({
+            url: `/blackjackRoom/${blackJackRoomID}/player/${seatNumber}/action`,
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ playerName: currentUser, action: action }),
+            success: function () {
+                updateRoomState();
+            },
+            error: function (xhr) {
+                alert(xhr.responseJSON.error || '操作失敗');
+            }
+        });
+    }
     // 更新房間狀態
     function updateRoomState() {
         $.get(`/blackjackRoom/${blackJackRoomID}/get`, function (data) {
-            const timer = data.timer_remaining;
-            const occupiedButtons = data.occupiedButtons;
-            $('#room-capacity').text("人數: " + data.blackJackRoom.current_players + "/" + data.blackJackRoom.capacity);
-            $('#timer').text(timer);
+            const { timer_remaining, occupiedButtons, blackJackRoom, user_balance } = data;
+            $roomCapacity.text(`人數: ${blackJackRoom.current_players}/${blackJackRoom.capacity}`);
+            $timer.text(timer_remaining);
             createButtons(occupiedButtons);
+            
+            playerSeatNumber = Object.keys(occupiedButtons).find(seat => occupiedButtons[seat] === currentUser) || null;
 
-            // 顯示離座按鈕
-            showLeaveSeatButton(data.occupiedButtons);
+            showLeaveSeatButton(occupiedButtons);
+            if (timer_remaining > 0) {
+                toggleBetContainer(occupiedButtons); // 顯示下注區塊
+                console.log(user_balance)
+                $('#bet-amount').attr('max', user_balance);
+            } else {
+                $betContainer.hide(); // 隱藏下注區塊
+            }
         }).fail(function () {
             alert('無法更新房間資訊');
         });
     }
 
-    // 根據玩家是否入座動態顯示離座按鈕
+    // 顯示離座按鈕
     function showLeaveSeatButton(occupiedButtons) {
-        const leaveSeatBtnContainer = $('#leave-seat-btn-container');
-        leaveSeatBtnContainer.empty();  // 每次更新時清空容器
+        $leaveSeatBtnContainer.empty();
 
         const playerSeat = Object.keys(occupiedButtons).find(seat => occupiedButtons[seat] === currentUser);
 
         if (playerSeat) {
-            // 如果玩家已經入座，顯示離座按鈕
             const leaveButton = $('<button>')
                 .addClass('btn btn-danger')
                 .text('離座')
-                .on('click', function () {
-                    // 觸發離座操作
-                    $.ajax({
-                        url: `/blackjackRoom/${blackJackRoomID}/player/${playerSeat}/action`,
-                        method: 'POST',
-                        contentType: 'application/json',
-                        data: JSON.stringify({ playerName: currentUser, action: 'leave' }),
-                        success: function(response) {
-                            alert('成功離座！');
-                            updateRoomState();  // 更新房間狀態
-                            leaveSeatBtnContainer.empty();  // 隱藏離座按鈕
-                        },
-                        error: function(xhr) {
-                            alert(xhr.responseJSON.error || '操作失敗');
-                        }
-                    });
-                });
+                .on('click', () => handleSeatAction(playerSeat, 'leave'));
 
-            leaveSeatBtnContainer.html(leaveButton);  // 顯示離座按鈕
+            $leaveSeatBtnContainer.html(leaveButton);
         }
     }
+
+    // 顯示或隱藏下注金額區塊
+    function toggleBetContainer(occupiedButtons) {
+        const playerSeat = Object.keys(occupiedButtons).find(seat => occupiedButtons[seat] === currentUser);
+
+        if (playerSeat) {
+            $betContainer.show();  // 顯示下注區塊
+        } else {
+            $betContainer.hide();  // 隱藏下注區塊
+        }
+    }
+
+    // 下注功能
+    $('#place-bet-btn').on('click', function() {
+        const betAmount = $('#bet-amount').val();
+
+        if (!betAmount || betAmount <= 0) {
+            alert('請輸入有效的金額！');
+            return;
+        }
+
+        if (!playerSeatNumber) {
+            alert('您尚未入座，無法下注！');
+            return;
+        }
+
+        // 取得user_balance並檢查下注金額
+        const userBalance = $('#bet-amount').attr('max'); // 這個最大值就是user_balance
+        if (parseFloat(betAmount) > parseFloat(userBalance)) {
+            // 如果下注金額超過餘額，將其設置為最大值
+            //alert(`您的餘額不足，已將下注金額設置為最大值：${userBalance}`);
+            $('#bet-amount').val(userBalance); // 更新輸入框的值為最大餘額
+            return;
+        }
+
+    // 進行下注請求
+    $.ajax({
+        url: `/blackjackRoom/${blackJackRoomID}/player/${playerSeatNumber}/action`,
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({ playerName: currentUser, action: 'bet', betAmount: betAmount }),
+        success: function() {
+            alert('下注成功！');
+        },
+        error: function(xhr) {
+            alert(xhr.responseJSON.error || '下注失敗');
+        }
+    });
+});
+
 
     // 初始化房間狀態更新
     $(document).ready(function () {

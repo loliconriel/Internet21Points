@@ -124,8 +124,7 @@ def blackjackRoom_player_action(blackJackRoomID, seat):
     data = request.get_json()
     player_name = data.get('playerName')
     action = data.get('action')
-    amount = data.get('amount', 0)  # 預設下注金額為 0
-
+    amount = int(data.get('betAmount', 0))  # 預設下注金額為 0
     # 轉發到 Server
     response = requests.post(f'{API_URL}/blackjackRoom/{blackJackRoomID}/player/{seat}/action', json={
         'playerName': player_name,
@@ -138,7 +137,8 @@ def blackjackRoom_player_action(blackJackRoomID, seat):
 def blackjack_room_get(blackJackRoomID):
     """獲取房間狀態"""
     try:
-        response = requests.get(f'{API_URL}/blackjackRoom/{blackJackRoomID}/get')
+        username = session.get('username')
+        response = requests.get(f'{API_URL}/blackjackRoom/{blackJackRoomID}/get',params={'username': username})
         return jsonify(response.json()), response.status_code
     except Exception as e:
         return jsonify({'error': f'獲取房間狀態失敗：{e}'}), 500
