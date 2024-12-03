@@ -118,10 +118,20 @@
             addMoneyBtn.style.display = 'none';
         }
     });
-
+    async function checkServerStatus() {
+        const statusIndicator = document.getElementById('server-status');
+        try {
+            const response = await fetch('http://127.0.0.1:5001/ping');
+            if (!response.ok) throw new Error();
+        } catch {
+            window.location.href = `/disconnect`;
+        }
+    }
+    checkServerStatus();
     $(document).ready(function () {
         loadMoney();
         setInterval(loadMoney, 5000); // 每5秒更新一次
+        setInterval(checkServerStatus,10000);
     });
 </script>
 </html>

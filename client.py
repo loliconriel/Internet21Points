@@ -18,6 +18,14 @@ def login_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
+@app.route('/disconnect', methods=['GET', 'POST'])
+def disconnect():
+    return render_template('disconnect.html')
+
+@app.route('/ping', methods=['GET'])
+def ping():
+    """伺服器健康檢查"""
+    return jsonify({'message': 'Pong!'}), 200
 
 @app.route('/')
 def home():

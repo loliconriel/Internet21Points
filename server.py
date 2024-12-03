@@ -85,6 +85,12 @@ def get_user_money(username):
         # 發生資料庫錯誤時返回 None
         print(f"Database error: {e}")
         return None
+
+@app.route('/ping', methods=['GET'])
+def ping():
+    """伺服器健康檢查"""
+    return jsonify({'message': 'Pong!'}), 200
+
 # 註冊 API
 @app.route('/register', methods=['POST'])
 def register():
