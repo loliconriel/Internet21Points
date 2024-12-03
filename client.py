@@ -115,7 +115,7 @@ def blackjackRoom_page(blackJackRoomID):
         blackJackRoom = response.json().get('blackJackRoom')
         if blackJackRoom is None:
             return redirect(url_for('home'))
-        return render_template('/blackjackRoom.html', blackJackRoom=blackJackRoom)
+        return render_template('/blackjackRoom.html', blackJackRoom=blackJackRoom, page_name='blackjackRoom')
 
     except:
         return redirect(url_for('home'))

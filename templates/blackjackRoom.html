@@ -12,7 +12,7 @@
     </div>
 
     <!-- 倒數計時 -->
-    <div class="container text-center mt-4">
+    <div id = "timer-panel" class="container text-center mt-4">
         <h5 id="timer-info" class="text-warning">倒數計時: <span id="timer">{{ blackJackRoom.timer_remaining }}</span> 秒</h5>
     </div>
 
@@ -30,7 +30,8 @@
     </div>
     <div class="container text-center mt-4">
         <h5 id="decision-info" class="text-info">
-            <span id="current-turn-player">--</span> 的剩餘時間: 
+            <span id="current-turn-player">--</span>
+            <span id="current-turn"> 的剩餘時間: </span>
             <span id="decision-time">--</span> 秒
         </h5>
     </div>
@@ -136,12 +137,35 @@
             $roomCapacity.text(`人數: ${blackJackRoom.current_players}/${blackJackRoom.capacity}`);
             $timer.text(timer_remaining);
             createButtons(occupiedButtons);
-            togglePlayerActions(occupiedButtons);
-            playerSeatNumber = Object.keys(occupiedButtons).find(seat => occupiedButtons[seat] === currentUser) || null;
+            
+            
+            if(current_turn == currentUser){
+                $('#player-actions-container').show();
+            }
+            else{
+                $('#player-actions-container').hide();
+            }
 
+            
+            playerSeatNumber = Object.keys(occupiedButtons).find(seat => occupiedButtons[seat] === currentUser) || null;
+            if(timer_remaining!=0){
+                $('#timer-panel').show();
+                $('#leave-seat-btn-container').show();
+            }
+            else{
+                $('#timer-panel').hide();
+                $('#leave-seat-btn-container').hide();
+            }
             const $decisionInfo = $('#decision-info');
             if (current_turn && decision_time_remaining !== null) {
+                
                 $('#current-turn-player').text(current_turn);
+                if(current_turn== '回合結束 進行結算'){
+                    $('#current-turn').text("");
+                }
+                else{
+                    $('#current-turn').text(" 的剩餘時間: ");
+                }
                 $('#decision-time').text(decision_time_remaining);
                 $decisionInfo.show(); // 顯示決策資訊
             } else {
@@ -166,14 +190,15 @@
     }
 
     // 顯示玩家動作按鈕
-    function togglePlayerActions(occupiedButtons) {
-        const playerSeat = Object.keys(occupiedButtons).find(seat => occupiedButtons[seat] === currentUser);
-        if (playerSeat) {
-            $('#player-actions-container').show(); // 顯示加牌與停牌按鈕
-        } else {
-            $('#player-actions-container').hide(); // 隱藏按鈕
-        }
-    }
+    // function togglePlayerActions(occupiedButtons) {
+    //     const playerSeat = Object.keys(occupiedButtons).find(seat => occupiedButtons[seat] === currentUser);
+    //     console.log(playerSeat)
+    //     if (playerSeat) {
+    //         $('#player-actions-container').show(); // 顯示加牌與停牌按鈕
+    //     } else {
+    //         $('#player-actions-container').hide(); // 隱藏按鈕
+    //     }
+    // }
     
     $('#hit-btn').on('click', function() {
         if (!playerSeatNumber) {
@@ -187,7 +212,7 @@
             contentType: 'application/json',
             data: JSON.stringify({ playerName: currentUser, action: 'hit' }),
             success: function(response) {
-                alert(response.message);
+                //alert(response.message);
                 updateRoomState(); // 更新房間狀態
             },
             error: function(xhr) {
@@ -273,7 +298,7 @@
         contentType: 'application/json',
         data: JSON.stringify({ playerName: currentUser, action: 'bet', betAmount: betAmount }),
         success: function() {
-            alert('下注成功！');
+            //alert('下注成功！');
         },
         error: function(xhr) {
             alert(xhr.responseJSON.error || '下注失敗');
@@ -310,13 +335,18 @@
             const betAmount = $('<p>')
             .text(`下注: ${player.bet || 0}`)
             .addClass('text-warning');
+            
+            const result = $('<p>')
+            .attr('id', `result-${player.username}`)
+            .text('結果: 尚未結算')
+            .addClass('text-info fw-bold mt-2');
 
             // 將玩家名稱、手牌圖片和點數加入到容器
-            container.append(playerName, cardImages, points,betAmount);
+            container.append(playerName, cardImages, points,betAmount,result);
             $playerHands.append(container);
         });
     }
-
+    
     function displayDealerCards(dealer) {
         const $dealerHand = $('#dealer-hand');
         const $dealerPoints = $('#dealer-points');

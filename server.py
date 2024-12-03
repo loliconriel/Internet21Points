@@ -3,11 +3,13 @@ import time
 import threading
 import requests
 import random
+import time
 from flask import Flask, request, jsonify,render_template
 from flask_cors import CORS
 
 app = Flask(__name__)
 TIMER_SECONDS = 10
+DEALER_SECONDS = 5
 DATABASE = 'user_data.db'
 CORS(app, resources={r"/*": {"origins": "http://127.0.0.1:5000"}})
 blackJackRoomList = [
@@ -198,23 +200,62 @@ def get_money():
                 return jsonify({'error': '用戶不存在'}), 404
     except sqlite3.Error as e:
         return jsonify({'error': f'資料庫錯誤: {str(e)}'}), 500
+    
+def minus_player_balances(players):
+    """根據遊戲結果更新玩家的金額"""
+    with sqlite3.connect(DATABASE) as conn:
+        cursor = conn.cursor()
+        for player in players:
+            money = get_user_money(player['username'])
+            bet = player['bet']
+            new_balance = int(money) - bet
+            cursor.execute("UPDATE User SET money = ? WHERE username = ?", (str(new_balance), player['username']))
+        conn.commit()
+
 def update_player_balances(results, players):
     """根據遊戲結果更新玩家的金額"""
     with sqlite3.connect(DATABASE) as conn:
         cursor = conn.cursor()
         for player in players:
+            if(player['bet']==0):continue
             result = results[player['username']]
             money = get_user_money(player['username'])
             bet = player['bet']
+            new_balance = 0
             if result == "贏了！":
-                new_balance = int(money) + bet
+                new_balance = int(money) + bet * 2
             elif result == "平手！":
-                new_balance = int(money)
-            else:
-                new_balance = int(money) - bet
+                new_balance = int(money) + bet
+            else: new_balance = int(money)
             print(new_balance)
             cursor.execute("UPDATE User SET money = ? WHERE username = ?", (str(new_balance), player['username']))
         conn.commit()
+
+
+
+
+@app.route('/blackjackRoom/<int:blackJackRoomID>/results', methods=['GET'])
+def get_game_results(blackJackRoomID):
+    room = next((r for r in blackJackRoomList if r['id'] == blackJackRoomID), None)
+    if not room:
+        return jsonify({'error': '房間不存在'}), 404
+
+    results = determine_results(room['players'], room['dealer']['hand'])
+    balances = {}
+    for player in room['players']:
+        username = player['username']
+        money = get_user_money(username)
+        result = results[username]
+        bet = player['bet']
+        if result == "贏了！":
+            change = bet
+        elif result == "輸了！":
+            change = -bet
+        else:
+            change = 0
+        balances[username] = {'result': result, 'change': change, 'final_balance': int(money) + change}
+    
+    return jsonify({'results': balances}), 200
 
 @app.route('/blackjackLobby', methods=['GET'])
 def blackjackLobby():
@@ -282,6 +323,7 @@ def calculate_score(cards):
         elif rank == '1':  # Ace
             score += 1
             aces += 1
+        elif rank == "-": continue
         else:
             score += int(rank)
 
@@ -295,6 +337,7 @@ def determine_results(players, dealer_hand):
     dealer_score = calculate_score(dealer_hand)
     results = {}
     for player in players:
+        if player['bet'] == 0:continue
         player_score = player['points']
         if player_score > 21:
             results[player['username']] = "爆牌，輸了！"
@@ -319,6 +362,14 @@ def start_game(room):
         room['dealer']['hand'] = []
         room['dealer']['points'] = 0
 
+        room['players'] = [player for player in room['players'] if player['bet'] > 0]
+        room['current_players'] = len(room['players'])
+        # 如果沒有有效玩家則結束遊戲
+        if not room['players']:
+            print("沒有有效的玩家參與遊戲")
+            reset_game(room)
+            return
+        
         # 清空玩家初始狀態
         for player in room['players']:
             player['hand'] = [room['deck'].pop(), room['deck'].pop()]  # 發兩張牌
@@ -326,14 +377,18 @@ def start_game(room):
             player['stand'] = False  # 初始化未停牌狀態
             player['timeout'] = False  # 是否超時自動停牌
 
-        # 給莊家發牌
-        room['dealer']['hand'] = [room['deck'].pop(), room['deck'].pop()]
-        room['dealer']['points'] = calculate_score(room['dealer']['hand'])
+        #扣錢來參與牌局
+        minus_player_balances(room['players'])
 
+        # 給莊家發牌
+        room['dealer']['hand'] = [room['deck'].pop(),"-1"]
+        room['dealer']['points'] = calculate_score(room['dealer']['hand'])
+        
         # 遊戲決策邏輯
         room['game_running'] = True
-        while any(not player['stand'] and player['points'] <= 21 for player in room['players']):
+        while any(player['bet'] != 0and not player['stand'] and player['points'] <= 21 for player in room['players']):
             for player in room['players']:
+                if player['bet']==0: continue
                 # 跳過已經停牌或爆牌的玩家
                 if player['stand'] or player['points'] > 21:
                     continue
@@ -355,17 +410,23 @@ def start_game(room):
                     print(f"玩家 {player['username']} 超時，執行自動停牌")
                     player['stand'] = True
                     player['timeout'] = True
-
+        room['dealer']['hand'].pop()
         # 莊家邏輯
+        room['current_turn'] = '莊家'
+        
         while room['dealer']['points'] < 17:
+            room['turn_start_time'] = time.time()
             card = room['deck'].pop()
             room['dealer']['hand'].append(card)
             room['dealer']['points'] = calculate_score(room['dealer']['hand'])
+            time.sleep(DEALER_SECONDS)
 
         # 結算
         results = determine_results(room['players'], room['dealer']['hand'])
         update_player_balances(results, room['players'])
-        time.sleep(10)
+        room['current_turn'] = '回合結束 進行結算'
+        room['turn_start_time'] = time.time()
+        time.sleep(5)
         # 重置遊戲狀態
         room['game_running'] = False
         print("遊戲結束，結果已結算。")
@@ -507,7 +568,9 @@ def get_blackjack_room_state(blackJackRoomID):
     decision_time_remaining = None
     if room['current_turn'] and room['turn_start_time']:
         elapsed_time = time.time() - room['turn_start_time']
-        decision_time_remaining = max(0, TIMER_SECONDS - int(elapsed_time))
+        if room['current_turn'] == '莊家': decision_time_remaining = max(0, DEALER_SECONDS - int(elapsed_time))
+        elif room['current_turn'] == '回合結束 進行結算': decision_time_remaining = max(0, DEALER_SECONDS - int(elapsed_time))
+        else: decision_time_remaining = max(0, TIMER_SECONDS - int(elapsed_time))
 
     if username:
         user_balance = get_user_money(username)
